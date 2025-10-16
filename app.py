@@ -2,14 +2,38 @@ from flask import Flask, render_template, request
 from netmiko import ConnectHandler
 import os
 from dotenv import load_dotenv
+import subprocess
+import atexit
 
 load_dotenv()
 
 app = Flask(__name__)
 
+import json
+
+# In-memory store for BGP data
+bgp_summary_data = None
+
+def start_monitor():
+    print("Starting BGP monitor...")
+    monitor_process = subprocess.Popen(['python', 'bgp_monitor.py'])
+    return monitor_process
+
+def stop_monitor(process):
+    print("Stopping BGP monitor...")
+    process.terminate()
+
+monitor_process = start_monitor()
+atexit.register(stop_monitor, monitor_process)
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        with open('bgp_summary.json', 'r') as f:
+            bgp_summary_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        bgp_summary_data = None
+    return render_template('index.html', bgp_summary=bgp_summary_data)
 
 @app.route('/reroute', methods=['POST'])
 def reroute():

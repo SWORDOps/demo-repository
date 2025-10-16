@@ -42,6 +42,35 @@
             <button type="submit" class="btn btn-primary mt-4">Execute</button>
         </form>
 
+        <h2 class="mt-5">BGP Summary</h2>
+        {% if bgp_summary %}
+        <table class="table table-striped mt-3">
+            <thead>
+                <tr>
+                    <th>Neighbor</th>
+                    <th>Version</th>
+                    <th>AS</th>
+                    <th>Up/Down</th>
+                    <th>State/PfxRcd</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for neighbor in bgp_summary %}
+                <tr>
+                    <td>{{ neighbor.neighbor }}</td>
+                    <td>{{ neighbor.version }}</td>
+                    <td>{{ neighbor.remote_as }}</td>
+                    <td>{{ neighbor.up_down }}</td>
+                    <td>{{ neighbor.state_pfxrcd }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="mt-3">No BGP summary data available. The monitor may be starting up or unable to connect.</p>
+        {% endif %}
+
+
         <h2 class="mt-5">Router Output</h2>
         <pre class="border p-3 mt-3"><code>{{ output | safe if output }}</code></pre>
     </div>
