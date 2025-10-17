@@ -1,72 +1,55 @@
-# Dynamic Decentralized Compute Load Balancer
+# Dynamic Decentralized Compute Load Balancer (Single Script Edition)
 
-This project provides a proof-of-concept for a dynamic load balancer that can allocate your compute resources to the most profitable decentralized network. It currently supports switching between **Akash Network** and **iExec**.
+This repository contains a single, self-contained bash script to deploy a compute provider on either **Akash Network** or **iExec**, dynamically switching based on which network's token is currently more valuable.
+
+This script is designed for maximum portability and ease of use, removing the need for multiple files and Python dependencies.
 
 ## How It Works
 
-The system is composed of three main parts:
+The `dynamic_balancer.sh` script handles everything:
 
-1.  **Setup Scripts (`setup_akash_provider.sh`, `setup_iexec_worker.sh`):** These bash scripts handle the automated setup and deployment of a provider node on either Akash or iExec. They install all necessary prerequisites and configure the services.
-2.  **Profitability Oracle (`get_profitability.py`):** A simple Python script that fetches the current market price of Akash's `AKT` token and iExec's `RLC` token from the public CoinGecko API.
-3.  **Core Switching Logic (`main.py`):** The main control script. It runs the oracle to get the latest prices, decides which network is currently more profitable, and then orchestrates the switch by tearing down the old service and bringing up the new one.
-
-The system maintains its current state in a hidden file (`.current_network`) to know which network is currently active.
-
-## Architecture Support
-
-**This entire stack only supports the `x86_64` (also known as `amd64`) architecture.**
-
-This is a limitation of the underlying provider software for both Akash and iExec. The setup scripts will automatically check your system's architecture and exit if it is not `x86_64`.
+1.  **Prerequisite Checks:** It automatically checks for and installs necessary tools like `curl` and `jq`. It also verifies that it's being run as root on a supported `x86_64` architecture.
+2.  **Profitability Oracle:** It calls the public CoinGecko API to get the current market prices of Akash's `AKT` and iExec's `RLC` tokens.
+3.  **Decision Engine:** It compares the token prices to determine the most profitable network.
+4.  **State Management:** It keeps track of the currently active network in a hidden file (`.current_network`) to avoid unnecessary work.
+5.  **Setup & Teardown:** It contains all the logic to install prerequisites (like Docker and k3s) and configure, start, or stop the services for either network.
 
 ## How to Use
 
 ### Prerequisites
 
 1.  **A dedicated `x86_64` machine:** A physical server or a VPS with a public IP address running a fresh **Ubuntu or Debian-based** OS.
-2.  **A domain name:** Required for the Akash provider.
-3.  **An Akash Wallet:** With `AKT` tokens.
-4.  **An iExec Wallet:** With `RLC` tokens. You will need to create a `worker_wallet.json` file in the project directory using the `iexec` CLI.
-5.  **Node.js and npm:** Required for the `iexec` CLI.
+2.  **For Akash:** A domain name and an Akash wallet address.
+3.  **For iExec:** An iExec wallet. You must create a `worker_wallet.json` file in the same directory as the script. You will also need Node.js/npm to install the `iexec` CLI for this.
 
-### Initial Setup
+### Execution
 
-1.  **Clone the repository:**
+1.  **Download the script:**
     ```bash
-    git clone https://github.com/your-username/your-repo-name.git
-    cd your-repo-name
+    curl -o dynamic_balancer.sh https://raw.githubusercontent.com/your-username/your-repo-name/main/dynamic_balancer.sh
+    ```
+    *(Note: Replace the URL with the actual raw file URL once committed.)*
+
+2.  **Make the script executable:**
+    ```bash
+    chmod +x dynamic_balancer.sh
     ```
 
-2.  **Make the setup scripts executable:**
-    ```bash
-    chmod +x setup_*.sh
-    ```
-
-3.  **Install the iExec CLI:**
+3.  **(For iExec) Create your wallet file:**
+    If you plan to use iExec, install their CLI and create the wallet file first.
     ```bash
     npm install -g iexec
-    ```
-
-4.  **Create your iExec wallet file:**
-    This will create the `worker_wallet.json` file that the iExec setup script needs.
-    ```bash
     iexec wallet create
     ```
     Make sure to fund this wallet and deposit RLC for staking as per the iExec documentation.
 
-### Running the Load Balancer
-
-To run a cycle of the load balancer, execute the main script:
-
-```bash
-python3 main.py
-```
-
-The script will:
-1.  Fetch the latest token prices.
-2.  Determine the most profitable network.
-3.  Check if a switch is necessary.
-4.  If a switch is needed, it will call the appropriate teardown and setup scripts. **You will need to be present to enter `sudo` passwords and any other information prompted by the setup scripts.**
+4.  **Run the balancer:**
+    Execute the script with `sudo`. It will guide you through the rest.
+    ```bash
+    sudo ./dynamic_balancer.sh
+    ```
+    The script will check profitability and, if a switch is needed, will prompt you for the necessary information (domain names, wallet addresses, passwords, etc.) to configure the new provider.
 
 ## Disclaimer
 
-This is a proof-of-concept and not a production-ready system. The profitability logic is extremely simple (it just compares token prices) and does not account for many real-world factors like network demand, transaction fees, or provider costs. It is intended for educational and demonstration purposes. Always do your own research.
+This is a proof-of-concept for educational and demonstration purposes. The profitability logic is simplistic and does not account for many real-world factors. Use at your own risk.
