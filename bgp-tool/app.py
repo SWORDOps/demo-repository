@@ -98,16 +98,35 @@ def history():
     all_hijacks = list(db.hijack_alerts.find().sort('timestamp', -1))
     return render_template('history.html', hijack_alerts=all_hijacks)
 
-from mitigation import mitigate_hijack, withdraw_mitigation
+@app.route('/rpki_helper')
+def rpki_helper():
+    config = load_config()
+    monitored_prefixes = config.get('monitored_prefixes', [])
+    authorized_as = config.get('authorized_as')
+
+    rpki_data = []
+    for prefix in monitored_prefixes:
+        rpki_data.append({
+            'prefix': prefix,
+            'status': get_rpki_status(prefix, authorized_as)
+        })
+
+    return render_template('rpki_helper.html', rpki_data=rpki_data)
+
+from mitigation import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki
 
 @app.route('/reroute', methods=['POST'])
 def reroute():
     action = request.form.get('action')
     prefix = request.form.get('prefix')
+    rpki_status = request.form.get('rpki_status')
     bgp_asn = os.getenv('BGP_ASN') # BGP_ASN is now consistently from .env
 
     if action == 'mitigate':
-        output = mitigate_hijack(prefix, bgp_asn)
+        if rpki_status == 'invalid':
+            output = challenge_with_rpki(prefix, bgp_asn)
+        else:
+            output = mitigate_hijack(prefix, bgp_asn)
     elif action == 'withdraw_mitigation':
         output = withdraw_mitigation(prefix, bgp_asn)
     else:
@@ -136,6 +155,26 @@ def reroute():
         except Exception as e:
             output = str(e)
 
+    return render_template('index.html', output=output)
+
+@app.route('/depeer', methods=['POST'])
+def depeer():
+    neighbor_ip = request.form.get('neighbor_ip')
+    output = depeer_neighbor(neighbor_ip)
+    return render_template('index.html', output=output)
+
+@app.route('/blackhole', methods=['POST'])
+def blackhole():
+    prefix = request.form.get('blackhole_prefix')
+    output = blackhole_route(prefix)
+    return render_template('index.html', output=output)
+
+@app.route('/rtbh', methods=['POST'])
+def rtbh():
+    prefix = request.form.get('prefix')
+    config = load_config()
+    communities = config.get('rtbh_communities', [])
+    output = signal_upstream(prefix, communities)
     return render_template('index.html', output=output)
 
 if __name__ == '__main__':
