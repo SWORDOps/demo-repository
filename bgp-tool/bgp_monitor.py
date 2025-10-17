@@ -3,7 +3,8 @@ import os
 from netmiko import ConnectHandler
 from dotenv import load_dotenv
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 def get_bgp_summary(device):
     with ConnectHandler(**device) as net_connect:
@@ -30,7 +31,8 @@ if __name__ == '__main__':
         while True:
             try:
                 summary = get_bgp_summary(device)
-                with open('bgp_summary.json', 'w') as f:
+                summary_path = os.path.join(os.path.dirname(__file__), 'bgp_summary.json')
+                with open(summary_path, 'w') as f:
                     json.dump(summary, f)
             except Exception as e:
                 print(f"Error collecting BGP data: {e}")

@@ -5,7 +5,8 @@ import time
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 # Configuration - will be moved to a separate file later
 MONITORED_PREFIXES = ['192.0.2.0/24']
@@ -39,7 +40,8 @@ if __name__ == '__main__':
     while True:
         hijacks = check_for_hijacks()
         if hijacks:
-            with open('hijack_alerts.json', 'w') as f:
+            alerts_path = os.path.join(os.path.dirname(__file__), 'hijack_alerts.json')
+            with open(alerts_path, 'w') as f:
                 json.dump(hijacks, f)
         # In a real application, you might want to clear the alerts file
         # if there are no hijacks, but for now we'll leave it as is.
