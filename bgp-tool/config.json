@@ -5,5 +5,8 @@
     "authorized_as": 64496,
     "auto_mitigate": false,
     "prepend_on_mitigate": true,
-    "prepend_count": 3
+    "prepend_count": 3,
+    "rtbh_communities": [
+        "65535:666"
+    ]
 }

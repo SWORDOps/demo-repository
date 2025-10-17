@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPKI Helper</title>
+    <link href="https://cdn.jsdelivr.net/npm/@primer/css@17.0.1/dist/primer.css" rel="stylesheet" />
+</head>
+<body class="p-4">
+    <div class="container-lg">
+        <div class="d-flex flex-justify-between flex-items-center">
+            <h1>RPKI Helper</h1>
+            <a href="/" class="btn">Back to Dashboard</a>
+        </div>
+
+        <p class="mt-3">This tool checks the RPKI status of your monitored prefixes. A status of "valid" means your prefixes are correctly signed and protected by RPKI. If you see "not-found" or "invalid", you should create or update your Route Origin Authorizations (ROAs) to ensure your prefixes are protected.</p>
+
+        <table class="table table-striped mt-3">
+            <thead>
+                <tr>
+                    <th>Monitored Prefix</th>
+                    <th>RPKI Status</th>
+                    <th>Recommendation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rpki_data %}
+                <tr>
+                    <td>{{ item.prefix }}</td>
+                    <td>
+                        {% if item.status == 'valid' %}
+                        <span class="text-green">Valid</span>
+                        {% elif item.status == 'invalid' %}
+                        <span class="text-red">Invalid</span>
+                        {% else %}
+                        <span class="text-gray">{{ item.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status == 'valid' %}
+                        <span class="text-green">No action needed.</span>
+                        {% elif item.status == 'invalid' %}
+                        <span class="text-red">Your ROA is incorrect. Please update it.</span>
+                        {% else %}
+                        <span class="text-gray">You should create a ROA for this prefix.</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
