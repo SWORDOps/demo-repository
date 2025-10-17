@@ -92,6 +92,14 @@ def reroute():
             config_commands.extend([f'network {sub.with_prefixlen}' for sub in subnets])
         except ValueError:
             return render_template('index.html', output=f"Error: Invalid prefix '{prefix}' for mitigation.")
+    elif action == 'withdraw_mitigation':
+        try:
+            net = ip_network(prefix)
+            subnets = list(net.subnets(new_prefix=net.prefixlen + 1))
+            config_commands = [f'router bgp {bgp_asn}']
+            config_commands.extend([f'no network {sub.with_prefixlen}' for sub in subnets])
+        except ValueError:
+            return render_template('index.html', output=f"Error: Invalid prefix '{prefix}' for mitigation.")
     else:
         config_commands = [
             f'router bgp {bgp_asn}',

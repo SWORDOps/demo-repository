@@ -65,10 +65,15 @@
                     <td>{{ alert.path | join(' -> ') }}</td>
                     <td>{{ alert.timestamp | int | strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td>
-                        <form action="/reroute" method="post">
+                        <form action="/reroute" method="post" style="display: inline;">
                             <input type="hidden" name="prefix" value="{{ alert.prefix }}">
                             <input type="hidden" name="action" value="mitigate">
                             <button type="submit" class="btn btn-danger btn-sm">Mitigate</button>
+                        </form>
+                        <form action="/reroute" method="post" style="display: inline;">
+                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
+                            <input type="hidden" name="action" value="withdraw_mitigation">
+                            <button type="submit" class="btn btn-secondary btn-sm">Withdraw</button>
                         </form>
                     </td>
                 </tr>
