@@ -1,0 +1,6 @@
+{
+    "monitored_prefixes": [
+        "192.0.2.0/24"
+    ],
+    "authorized_as": 64496
+}

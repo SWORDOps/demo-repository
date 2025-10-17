@@ -42,7 +42,15 @@
             <button type="submit" class="btn btn-primary mt-4">Execute</button>
         </form>
 
-        <h2 class="mt-5">BGP Hijack Alerts</h2>
+        {% if db_error %}
+        <div class="alert alert-danger mt-3" role="alert">
+            <strong>Database Error:</strong> {{ db_error }}
+        </div>
+        {% endif %}
+        <div class="d-flex flex-justify-between flex-items-center mt-5">
+            <h2>BGP Hijack Alerts</h2>
+            <a href="/history" class="btn">View Full History</a>
+        </div>
         {% if hijack_alerts %}
         <div class="alert alert-danger" role="alert">
             <strong>Warning!</strong> The following BGP hijacks have been detected:
@@ -62,8 +70,8 @@
                 <tr>
                     <td>{{ alert.prefix }}</td>
                     <td>{{ alert.hijacking_as }}</td>
-                    <td>{{ alert.path | join(' -> ') }}</td>
-                    <td>{{ alert.timestamp | int | strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><a href="#">{{ alert.path | join(' -> ') }}</a></td>
+                    <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
                     <td>
                         <form action="/reroute" method="post" style="display: inline;">
                             <input type="hidden" name="prefix" value="{{ alert.prefix }}">
@@ -82,6 +90,32 @@
         </table>
         {% else %}
         <p class="mt-3">No BGP hijacks detected.</p>
+        {% endif %}
+
+        <h2 class="mt-5">Recent BGP Flaps</h2>
+        {% if bgp_flaps %}
+        <table class="table table-striped mt-3">
+            <thead>
+                <tr>
+                    <th>Neighbor</th>
+                    <th>Previous State</th>
+                    <th>Current State</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for flap in bgp_flaps %}
+                <tr>
+                    <td>{{ flap.neighbor }}</td>
+                    <td>{{ flap.previous_state }}</td>
+                    <td>{{ flap.current_state }}</td>
+                    <td>{{ flap.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="mt-3">No recent BGP flaps detected.</p>
         {% endif %}
 
         <h2 class="mt-5">BGP Summary</h2>

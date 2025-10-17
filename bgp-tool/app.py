@@ -13,7 +13,8 @@ app = Flask(__name__)
 
 @app.template_filter('strftime')
 def _jinja2_filter_datetime(date, fmt=None):
-    date = datetime.fromtimestamp(date)
+    if isinstance(date, (int, float)):
+        date = datetime.fromtimestamp(date)
     return date.strftime(fmt or '%Y-%m-%d %H:%M:%S')
 
 import json
@@ -37,23 +38,44 @@ def stop_monitors(processes):
 monitor_processes = start_monitors()
 atexit.register(stop_monitors, monitor_processes)
 
+from database import get_db_connection
+
 @app.route('/')
 def index():
-    bgp_summary_path = os.path.join(os.path.dirname(__file__), 'bgp_summary.json')
-    hijack_alerts_path = os.path.join(os.path.dirname(__file__), 'hijack_alerts.json')
-    try:
-        with open(bgp_summary_path, 'r') as f:
-            bgp_summary_data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        bgp_summary_data = None
+    latest_summary = None
+    recent_hijacks = None
+    recent_flaps = None
+    db_error = None
 
     try:
-        with open(hijack_alerts_path, 'r') as f:
-            hijack_alerts_data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        hijack_alerts_data = None
+        db = get_db_connection()
 
-    return render_template('index.html', bgp_summary=bgp_summary_data, hijack_alerts=hijack_alerts_data)
+        # Fetch the most recent BGP summary for each neighbor
+        latest_summary = list(db.bgp_summary.aggregate([
+            {'$sort': {'timestamp': -1}},
+            {'$group': {
+                '_id': '$neighbor',
+                'doc': {'$first': '$$ROOT'}
+            }},
+            {'$replaceRoot': {'newRoot': '$doc'}}
+        ]))
+
+        # Fetch the most recent hijack alerts
+        recent_hijacks = list(db.hijack_alerts.find().sort('timestamp', -1).limit(10))
+
+        # Fetch the most recent BGP flaps
+        recent_flaps = list(db.bgp_flaps.find().sort('timestamp', -1).limit(10))
+
+    except Exception as e:
+        db_error = f"Error connecting to the database: {e}"
+
+    return render_template('index.html', bgp_summary=latest_summary, hijack_alerts=recent_hijacks, bgp_flaps=recent_flaps, db_error=db_error)
+
+@app.route('/history')
+def history():
+    db = get_db_connection()
+    all_hijacks = list(db.hijack_alerts.find().sort('timestamp', -1))
+    return render_template('history.html', hijack_alerts=all_hijacks)
 
 from ipaddress import ip_network
 
