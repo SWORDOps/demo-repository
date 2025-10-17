@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect, url_for
 from datetime import datetime
 from netmiko import ConnectHandler
 import os
@@ -40,12 +40,18 @@ atexit.register(stop_monitors, monitor_processes)
 
 from database import get_db_connection
 
+def load_config():
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    with open(config_path, 'r') as f:
+        return json.load(f)
+
 @app.route('/')
 def index():
     latest_summary = None
     recent_hijacks = None
     recent_flaps = None
     db_error = None
+    config = load_config()
 
     try:
         db = get_db_connection()
@@ -69,7 +75,22 @@ def index():
     except Exception as e:
         db_error = f"Error connecting to the database: {e}"
 
-    return render_template('index.html', bgp_summary=latest_summary, hijack_alerts=recent_hijacks, bgp_flaps=recent_flaps, db_error=db_error)
+    return render_template('index.html', bgp_summary=latest_summary, hijack_alerts=recent_hijacks, bgp_flaps=recent_flaps, db_error=db_error, config=config)
+
+@app.route('/update_config', methods=['POST'])
+def update_config():
+    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+
+    config['auto_mitigate'] = 'auto_mitigate' in request.form
+    config['prepend_on_mitigate'] = 'prepend_on_mitigate' in request.form
+    config['prepend_count'] = int(request.form.get('prepend_count', 3))
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=4)
+
+    return redirect(url_for('index'))
 
 @app.route('/history')
 def history():
@@ -77,63 +98,43 @@ def history():
     all_hijacks = list(db.hijack_alerts.find().sort('timestamp', -1))
     return render_template('history.html', hijack_alerts=all_hijacks)
 
-from ipaddress import ip_network
+from mitigation import mitigate_hijack, withdraw_mitigation
 
 @app.route('/reroute', methods=['POST'])
 def reroute():
     action = request.form.get('action')
     prefix = request.form.get('prefix')
+    bgp_asn = os.getenv('BGP_ASN') # BGP_ASN is now consistently from .env
 
     if action == 'mitigate':
-        router_ip = os.getenv('ROUTER_IP')
-        username = os.getenv('ROUTER_USER')
-        password = os.getenv('ROUTER_PASSWORD')
-        bgp_asn = os.getenv('BGP_ASN') # Assuming BGP_ASN is in .env for mitigation
-        if not all([router_ip, username, password, bgp_asn, prefix]):
-            return render_template('index.html', output="Error: Missing required environment variables for mitigation.")
+        output = mitigate_hijack(prefix, bgp_asn)
+    elif action == 'withdraw_mitigation':
+        output = withdraw_mitigation(prefix, bgp_asn)
     else:
+        # Manual advertise/withdraw
         router_ip = request.form['router_ip']
         username = request.form['username'] or os.getenv('ROUTER_USER')
         password = request.form['password'] or os.getenv('ROUTER_PASSWORD')
-        bgp_asn = request.form['bgp_asn']
-        if not all([router_ip, bgp_asn, prefix, action]) or not (username and password):
-            return render_template('index.html', output="Error: All fields are required.")
+        bgp_asn_form = request.form['bgp_asn'] # Manual ASN from form
 
-    device = {
-        'device_type': 'cisco_ios',
-        'host': router_ip,
-        'username': username,
-        'password': password,
-    }
+        if not all([router_ip, bgp_asn_form, prefix, action]) or not (username and password):
+            return render_template('index.html', output="Error: All fields are required for manual action.")
 
-    if action == 'mitigate':
-        try:
-            net = ip_network(prefix)
-            subnets = list(net.subnets(new_prefix=net.prefixlen + 1))
-            config_commands = [f'router bgp {bgp_asn}']
-            config_commands.extend([f'network {sub.with_prefixlen}' for sub in subnets])
-        except ValueError:
-            return render_template('index.html', output=f"Error: Invalid prefix '{prefix}' for mitigation.")
-    elif action == 'withdraw_mitigation':
-        try:
-            net = ip_network(prefix)
-            subnets = list(net.subnets(new_prefix=net.prefixlen + 1))
-            config_commands = [f'router bgp {bgp_asn}']
-            config_commands.extend([f'no network {sub.with_prefixlen}' for sub in subnets])
-        except ValueError:
-            return render_template('index.html', output=f"Error: Invalid prefix '{prefix}' for mitigation.")
-    else:
+        device = {
+            'device_type': 'cisco_ios',
+            'host': router_ip,
+            'username': username,
+            'password': password,
+        }
         config_commands = [
-            f'router bgp {bgp_asn}',
+            f'router bgp {bgp_asn_form}',
             f'network {prefix}' if action == 'advertise' else f'no network {prefix}',
         ]
-
-    output = ""
-    try:
-        with ConnectHandler(**device) as net_connect:
-            output = net_connect.send_config_set(config_commands)
-    except Exception as e:
-        output = str(e)
+        try:
+            with ConnectHandler(**device) as net_connect:
+                output = net_connect.send_config_set(config_commands)
+        except Exception as e:
+            output = str(e)
 
     return render_template('index.html', output=output)
 

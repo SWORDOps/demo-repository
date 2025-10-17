@@ -27,6 +27,18 @@ def init_db():
     if "bgp_flaps" not in db.list_collection_names():
         db.create_collection("bgp_flaps")
 
+def get_latest_bgp_summary():
+    """Returns the most recent BGP summary for each neighbor."""
+    db = get_db_connection()
+    return list(db.bgp_summary.aggregate([
+        {'$sort': {'timestamp': -1}},
+        {'$group': {
+            '_id': '$neighbor',
+            'doc': {'$first': '$$ROOT'}
+        }},
+        {'$replaceRoot': {'newRoot': '$doc'}}
+    ]))
+
 if __name__ == '__main__':
     # This allows us to initialize the database from the command line.
     init_db()

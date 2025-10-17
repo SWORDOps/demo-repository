@@ -2,5 +2,8 @@
     "monitored_prefixes": [
         "192.0.2.0/24"
     ],
-    "authorized_as": 64496
+    "authorized_as": 64496,
+    "auto_mitigate": false,
+    "prepend_on_mitigate": true,
+    "prepend_count": 3
 }
