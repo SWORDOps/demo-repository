@@ -42,6 +42,43 @@
             <button type="submit" class="btn btn-primary mt-4">Execute</button>
         </form>
 
+        <h2 class="mt-5">BGP Hijack Alerts</h2>
+        {% if hijack_alerts %}
+        <div class="alert alert-danger" role="alert">
+            <strong>Warning!</strong> The following BGP hijacks have been detected:
+        </div>
+        <table class="table table-striped mt-3">
+            <thead>
+                <tr>
+                    <th>Monitored Prefix</th>
+                    <th>Hijacking AS</th>
+                    <th>AS Path</th>
+                    <th>Timestamp</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in hijack_alerts %}
+                <tr>
+                    <td>{{ alert.prefix }}</td>
+                    <td>{{ alert.hijacking_as }}</td>
+                    <td>{{ alert.path | join(' -> ') }}</td>
+                    <td>{{ alert.timestamp | int | strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>
+                        <form action="/reroute" method="post">
+                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
+                            <input type="hidden" name="action" value="mitigate">
+                            <button type="submit" class="btn btn-danger btn-sm">Mitigate</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="mt-3">No BGP hijacks detected.</p>
+        {% endif %}
+
         <h2 class="mt-5">BGP Summary</h2>
         {% if bgp_summary %}
         <table class="table table-striped mt-3">

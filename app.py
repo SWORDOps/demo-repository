@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request
+from datetime import datetime
 from netmiko import ConnectHandler
 import os
 from dotenv import load_dotenv
@@ -9,22 +10,29 @@ load_dotenv()
 
 app = Flask(__name__)
 
+@app.template_filter('strftime')
+def _jinja2_filter_datetime(date, fmt=None):
+    date = datetime.fromtimestamp(date)
+    return date.strftime(fmt or '%Y-%m-%d %H:%M:%S')
+
 import json
 
 # In-memory store for BGP data
 bgp_summary_data = None
 
-def start_monitor():
-    print("Starting BGP monitor...")
-    monitor_process = subprocess.Popen(['python', 'bgp_monitor.py'])
-    return monitor_process
+def start_monitors():
+    print("Starting monitors...")
+    bgp_monitor = subprocess.Popen(['python', 'bgp_monitor.py'])
+    ripestat_monitor = subprocess.Popen(['python', 'ripestat_monitor.py'])
+    return [bgp_monitor, ripestat_monitor]
 
-def stop_monitor(process):
-    print("Stopping BGP monitor...")
-    process.terminate()
+def stop_monitors(processes):
+    print("Stopping monitors...")
+    for p in processes:
+        p.terminate()
 
-monitor_process = start_monitor()
-atexit.register(stop_monitor, monitor_process)
+monitor_processes = start_monitors()
+atexit.register(stop_monitors, monitor_processes)
 
 @app.route('/')
 def index():
@@ -33,19 +41,36 @@ def index():
             bgp_summary_data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         bgp_summary_data = None
-    return render_template('index.html', bgp_summary=bgp_summary_data)
+
+    try:
+        with open('hijack_alerts.json', 'r') as f:
+            hijack_alerts_data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        hijack_alerts_data = None
+
+    return render_template('index.html', bgp_summary=bgp_summary_data, hijack_alerts=hijack_alerts_data)
+
+from ipaddress import ip_network
 
 @app.route('/reroute', methods=['POST'])
 def reroute():
-    router_ip = request.form['router_ip']
-    username = request.form['username'] or os.getenv('ROUTER_USER')
-    password = request.form['password'] or os.getenv('ROUTER_PASSWORD')
-    bgp_asn = request.form['bgp_asn']
-    prefix = request.form['prefix']
-    action = request.form['action']
+    action = request.form.get('action')
+    prefix = request.form.get('prefix')
 
-    if not all([router_ip, bgp_asn, prefix, action]) or not (username and password):
-        return render_template('index.html', output="Error: All fields are required.")
+    if action == 'mitigate':
+        router_ip = os.getenv('ROUTER_IP')
+        username = os.getenv('ROUTER_USER')
+        password = os.getenv('ROUTER_PASSWORD')
+        bgp_asn = os.getenv('BGP_ASN') # Assuming BGP_ASN is in .env for mitigation
+        if not all([router_ip, username, password, bgp_asn, prefix]):
+            return render_template('index.html', output="Error: Missing required environment variables for mitigation.")
+    else:
+        router_ip = request.form['router_ip']
+        username = request.form['username'] or os.getenv('ROUTER_USER')
+        password = request.form['password'] or os.getenv('ROUTER_PASSWORD')
+        bgp_asn = request.form['bgp_asn']
+        if not all([router_ip, bgp_asn, prefix, action]) or not (username and password):
+            return render_template('index.html', output="Error: All fields are required.")
 
     device = {
         'device_type': 'cisco_ios',
@@ -54,10 +79,19 @@ def reroute():
         'password': password,
     }
 
-    config_commands = [
-        f'router bgp {bgp_asn}',
-        f'network {prefix}' if action == 'advertise' else f'no network {prefix}',
-    ]
+    if action == 'mitigate':
+        try:
+            net = ip_network(prefix)
+            subnets = list(net.subnets(new_prefix=net.prefixlen + 1))
+            config_commands = [f'router bgp {bgp_asn}']
+            config_commands.extend([f'network {sub.with_prefixlen}' for sub in subnets])
+        except ValueError:
+            return render_template('index.html', output=f"Error: Invalid prefix '{prefix}' for mitigation.")
+    else:
+        config_commands = [
+            f'router bgp {bgp_asn}',
+            f'network {prefix}' if action == 'advertise' else f'no network {prefix}',
+        ]
 
     output = ""
     try:
