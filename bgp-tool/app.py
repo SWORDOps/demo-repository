@@ -144,6 +144,8 @@ def rpki_helper():
             'status': get_rpki_status(prefix, authorized_as)
         })
 
+    return render_template('rpki_helper.html', rpki_data=rpki_data)
+from mitigation import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki
     return render_template('rpki_helper.html', rpki_data=rpki_data, config=config)
 
 @app.route('/analytics')
@@ -289,6 +291,14 @@ def reroute():
     action = request.form.get('action')
     prefix = request.form.get('prefix')
     rpki_status = request.form.get('rpki_status')
+    bgp_asn = os.getenv('BGP_ASN') # BGP_ASN is now consistently from .env
+
+    if action == 'mitigate':
+        if rpki_status == 'invalid':
+            output = challenge_with_rpki(prefix, bgp_asn)
+        else:
+            output = mitigate_hijack(prefix, bgp_asn)
+
     bgp_asn = os.getenv('BGP_ASN')
 
     if action == 'mitigate':
@@ -311,6 +321,26 @@ def reroute():
     # To prevent breaking the UI, we'll just redirect to the index
     # A better solution would be to use AJAX to display the output
     return redirect(url_for('index', output=output))
+
+@app.route('/depeer', methods=['POST'])
+def depeer():
+    neighbor_ip = request.form.get('neighbor_ip')
+    output = depeer_neighbor(neighbor_ip)
+    return render_template('index.html', output=output)
+
+@app.route('/blackhole', methods=['POST'])
+def blackhole():
+    prefix = request.form.get('blackhole_prefix')
+    output = blackhole_route(prefix)
+    return render_template('index.html', output=output)
+
+@app.route('/rtbh', methods=['POST'])
+def rtbh():
+    prefix = request.form.get('prefix')
+    config = load_config()
+    communities = config.get('rtbh_communities', [])
+    output = signal_upstream(prefix, communities)
+    return render_template('index.html', output=output)
 
 @app.route('/depeer', methods=['POST'])
 def depeer():
