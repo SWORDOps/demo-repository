@@ -127,25 +127,258 @@ def apply_flowspec_rule(source_prefix=None, dest_prefix=None):
 
     return send_config_to_router(commands)
 
-def inject_igp_route(prefix, protocol, process_id):
+def set_community_for_neighbor(neighbor_ip, prefix, communities):
     """
-    Injects a static route into an IGP process (OSPF or EIGRP) via redistribution.
+    Applies a BGP community string for a specific prefix to a single neighbor.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    # Sanitize inputs for command strings
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    # Community strings can be complex, so we'll just use a generic name
+    route_map_name = f"COMMUNITY_{prefix_sanitized}_{neighbor_sanitized}"
+    prefix_list_name = f"PL_COMMUNITY_{prefix_sanitized}"
+
+    commands = [
+        # Create an ACL to match the specific prefix
+        f'ip prefix-list {prefix_list_name} permit {prefix}',
+        # Create the route-map
+        f'route-map {route_map_name} permit 10',
+        f' match ip address prefix-list {prefix_list_name}',
+        f' set community {communities}',
+        'exit',
+        # Create a second sequence to permit other routes without modification
+        f'route-map {route_map_name} permit 20',
+        'exit',
+        # Apply the route-map to the neighbor
+        f'router bgp {bgp_asn}',
+        f' neighbor {neighbor_ip} route-map {route_map_name} out',
+        'end'
+    ]
+
+    return send_config_to_router(commands)
+
+import re
+
+# Define constants for our specific IGP injection method
+IGP_ROUTE_TAG = '777'
+IGP_ROUTE_MAP_NAME = 'BGP_TOOL_IGP_INJECT'
+
+
+def get_active_influence_policies():
+    """
+    Parses the router's running configuration to find active influence policies
+    created by this tool.
+    """
+    active_policies = {'bgp': [], 'igp': []}
+
+    # Get the running config from the router
+    try:
+        config = send_config_to_router(['show running-config'])
+        if "Error" in config:
+            return active_policies
+    except Exception:
+        return active_policies
+
+    # Regex to find BGP neighbor policies applied by this tool
+    bgp_policy_regex = re.compile(r"neighbor (\S+) route-map (DEPRIORITIZE|INFLUENCE|COMMUNITY)_(\S+)_(\S+) out")
+
+    for line in config.splitlines():
+        match = bgp_policy_regex.search(line)
+        if match:
+            neighbor_ip, policy_type, prefix, _ = match.groups()
+            # Reconstruct the original prefix from the sanitized version
+            original_prefix = prefix.replace('_', '/').replace('-', '.')
+
+            policy_name = 'Unknown'
+            if policy_type == 'DEPRIORITIZE':
+                policy_name = 'Deprioritize Route'
+            elif policy_type == 'INFLUENCE':
+                policy_name = 'Advertise More-Specific'
+            elif policy_type == 'COMMUNITY':
+                policy_name = 'Set BGP Community'
+
+            active_policies['bgp'].append({
+                'type': policy_name,
+                'neighbor': neighbor_ip,
+                'prefix': original_prefix,
+                # Add a unique ID for easy DOM manipulation/API calls
+                'id': f"bgp-{policy_type}-{neighbor_ip}-{original_prefix}".replace('.', '_').replace('/', '_')
+            })
+
+    # --- New IGP Policy Detection Logic ---
+    # Regex to find our tagged static routes
+    igp_route_regex = re.compile(rf"ip route (\S+ \S+) Null0 tag {IGP_ROUTE_TAG}")
+    # Regex to find which IGP is using our route-map
+    igp_redist_regex = re.compile(rf"router (ospf|eigrp) (\d+)\s*\n(?: .*\n)*?.*?redistribute static route-map {IGP_ROUTE_MAP_NAME}")
+
+    # Find all prefixes from tagged routes
+    injected_routes_str = igp_route_regex.findall(config)
+
+    # Find the IGP process that is using our route map
+    igp_match = igp_redist_regex.search(config)
+    if igp_match and injected_routes_str:
+        protocol, process_id = igp_match.groups()
+        for route_str in injected_routes_str:
+            try:
+                # Parse the route string '192.168.1.0 255.255.255.0' into an ip_network object
+                net = ip_network(route_str.replace(' ', '/'), strict=False)
+                prefix = net.with_prefixlen
+                active_policies['igp'].append({
+                    'type': 'IGP Route Injection',
+                    'protocol': protocol.upper(),
+                    'process_id': process_id,
+                    'prefix': prefix,
+                    'id': f"igp-{protocol}-{process_id}-{prefix}".replace('.', '_').replace('/', '_')
+                })
+            except ValueError:
+                # Skip any routes that can't be parsed, though this shouldn't happen
+                continue
+
+    return active_policies
+
+
+def withdraw_igp_route(prefix, protocol, process_id):
+    """
+    Withdraws a previously injected static route and cleans up the IGP config
+    if it's the last injected route.
     """
     try:
         net = ip_network(prefix)
     except (ValueError, Exception) as e:
         return f"Error: Invalid prefix specified: {e}"
 
-    if protocol not in ['ospf', 'eigrp']:
+    # Get the current config to check if this is the last route
+    config = send_config_to_router(['show running-config'])
+    if "Error" in config:
+        return "Error: Could not retrieve router config to check for other injected routes."
+
+    # Find all tagged routes
+    igp_route_regex = re.compile(rf"ip route (\S+ \S+) Null0 tag {IGP_ROUTE_TAG}")
+    all_injected_routes_str = igp_route_regex.findall(config)
+
+    # The command to remove the specific static route
+    commands = [
+        f'no ip route {net.network_address} {net.netmask} Null0 tag {IGP_ROUTE_TAG}',
+    ]
+
+    # Check if the route we are about to remove is the last one
+    is_last_route = False
+    if len(all_injected_routes_str) == 1:
+        try:
+            # Check if the single route in the config matches the one we're removing
+            last_route_net = ip_network(all_injected_routes_str[0].replace(' ', '/'), strict=False)
+            if last_route_net == net:
+                is_last_route = True
+        except ValueError:
+            pass # Ignore if parsing fails
+
+    if is_last_route:
+        # If it is the last route, remove the redistribution and the route-map
+        commands.extend([
+            f'router {protocol.lower()} {process_id}',
+            f' no redistribute static route-map {IGP_ROUTE_MAP_NAME}',
+            'exit',
+            f'no route-map {IGP_ROUTE_MAP_NAME}',
+        ])
+
+    commands.append('end')
+    return send_config_to_router(commands)
+
+def withdraw_deprioritize_route_for_neighbor(neighbor_ip, prefix):
+    """
+    Withdraws the AS_PATH prepending policy for a specific neighbor and prefix.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    route_map_name = f"DEPRIORITIZE_{prefix_sanitized}_{neighbor_sanitized}"
+    prefix_list_name = f"PL_{prefix_sanitized}"
+
+    commands = [
+        f'router bgp {bgp_asn}',
+        f' no neighbor {neighbor_ip} route-map {route_map_name} out',
+        'exit',
+        f'no route-map {route_map_name}',
+        f'no ip prefix-list {prefix_list_name}',
+        'end'
+    ]
+    return send_config_to_router(commands)
+
+def withdraw_influence_neighbor_with_more_specific(neighbor_ip, prefix):
+    """
+    Withdraws the more-specific advertisement for a specific neighbor and prefix.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    try:
+        net = ip_network(prefix)
+        subnets = list(net.subnets(new_prefix=net.prefixlen + 1))
+    except (ValueError, Exception) as e:
+        return f"Error creating subnets: {e}"
+
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    route_map_name = f"INFLUENCE_{prefix_sanitized}_{neighbor_sanitized}"
+    prefix_list_name = f"PL_MORE_SPECIFIC_{prefix_sanitized}"
+
+    commands = [
+        f'router bgp {bgp_asn}',
+        f' no neighbor {neighbor_ip} route-map {route_map_name} out',
+    ]
+    commands.extend([f' no network {sub.with_prefixlen}' for sub in subnets])
+    commands.extend([
+        'exit',
+        f'no route-map {route_map_name}',
+        f'no ip prefix-list {prefix_list_name}',
+        'end'
+    ])
+    return send_config_to_router(commands)
+
+def withdraw_set_community_for_neighbor(neighbor_ip, prefix):
+    """
+    Withdraws a BGP community string policy for a specific neighbor and prefix.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    route_map_name = f"COMMUNITY_{prefix_sanitized}_{neighbor_sanitized}"
+    prefix_list_name = f"PL_COMMUNITY_{prefix_sanitized}"
+
+    commands = [
+        f'router bgp {bgp_asn}',
+        f' no neighbor {neighbor_ip} route-map {route_map_name} out',
+        'exit',
+        f'no route-map {route_map_name}',
+        f'no ip prefix-list {prefix_list_name}',
+        'end'
+    ]
+    return send_config_to_router(commands)
+
+
+def inject_igp_route(prefix, protocol, process_id):
+    """
+    Injects a tagged static route and redistributes it into an IGP process
+    using a dedicated, safe route-map.
+    """
+    try:
+        net = ip_network(prefix)
+    except (ValueError, Exception) as e:
+        return f"Error: Invalid prefix specified: {e}"
+
+    if protocol.lower() not in ['ospf', 'eigrp']:
         return "Error: Invalid protocol specified. Must be 'ospf' or 'eigrp'."
 
     commands = [
-        # Create a static route pointing to Null0. This route will be redistributed.
-        f'ip route {net.network_address} {net.netmask} Null0',
+        # Create/ensure the route-map for our tagged routes exists
+        f'route-map {IGP_ROUTE_MAP_NAME} permit 10',
+        f' match tag {IGP_ROUTE_TAG}',
+        'exit',
+        # Create the tagged static route pointing to Null0
+        f'ip route {net.network_address} {net.netmask} Null0 tag {IGP_ROUTE_TAG}',
         # Enter the router configuration for the specified IGP
-        f'router {protocol} {process_id}',
-        # Redistribute the static route into the IGP
-        'redistribute static',
+        f'router {protocol.lower()} {process_id}',
+        # Redistribute static routes that match our route-map
+        f' redistribute static route-map {IGP_ROUTE_MAP_NAME}',
         'end'
     ]
 

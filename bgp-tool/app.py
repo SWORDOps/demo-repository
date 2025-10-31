@@ -53,6 +53,7 @@ def index():
     recent_flaps = None
     db_error = None
     config = load_config()
+    active_policies = {'bgp': [], 'igp': []}
 
     try:
         db = get_db_connection()
@@ -73,10 +74,19 @@ def index():
         # Fetch the most recent BGP flaps
         recent_flaps = list(db.bgp_flaps.find().sort('timestamp', -1).limit(10))
 
+        # Get active influence policies from the router
+        active_policies = get_active_influence_policies()
+
     except Exception as e:
         db_error = f"Error connecting to the database: {e}"
 
-    return render_template('index.html', bgp_summary=latest_summary, hijack_alerts=recent_hijacks, bgp_flaps=recent_flaps, db_error=db_error, config=config)
+    return render_template('index.html',
+                           bgp_summary=latest_summary,
+                           hijack_alerts=recent_hijacks,
+                           bgp_flaps=recent_flaps,
+                           db_error=db_error,
+                           config=config,
+                           active_policies=active_policies)
 
 @app.route('/update_config', methods=['POST'])
 def update_config():
@@ -178,7 +188,50 @@ def analytics():
                            top_offenders=top_offenders,
                            db_error=db_error)
 
-from mitigation_logic import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki, apply_flowspec_rule, withdraw_flowspec_rule, deploy_eem_sentry, deprioritize_route_for_neighbor, influence_neighbor_with_more_specific, inject_igp_route
+from mitigation_logic import (
+    mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route,
+    signal_upstream, challenge_with_rpki, apply_flowspec_rule,
+    withdraw_flowspec_rule, deploy_eem_sentry, deprioritize_route_for_neighbor,
+    influence_neighbor_with_more_specific, inject_igp_route,
+    get_active_influence_policies, withdraw_deprioritize_route_for_neighbor,
+    withdraw_influence_neighbor_with_more_specific, withdraw_igp_route,
+    set_community_for_neighbor, withdraw_set_community_for_neighbor
+)
+
+@app.route('/withdraw_bgp_influence', methods=['POST'])
+def withdraw_bgp_influence():
+    neighbor = request.form.get('neighbor')
+    prefix = request.form.get('prefix')
+    policy_type = request.form.get('policy_type')
+
+    # Map the UI policy names to the withdrawal functions
+    if policy_type == 'Deprioritize Route':
+        output = withdraw_deprioritize_route_for_neighbor(neighbor, prefix)
+    elif policy_type == 'Advertise More-Specific':
+        output = withdraw_influence_neighbor_with_more_specific(neighbor, prefix)
+    elif policy_type == 'Set BGP Community':
+        output = withdraw_set_community_for_neighbor(neighbor, prefix)
+    else:
+        output = "Invalid policy type for withdrawal."
+
+    # Using flash messages is a better way to show status on redirect
+    # flash(f"Withdrawal command sent. Router output: {output}")
+    return redirect(url_for('index'))
+
+@app.route('/withdraw_igp_influence', methods=['POST'])
+def withdraw_igp_influence():
+    protocol = request.form.get('protocol')
+    process_id = request.form.get('process_id')
+    prefix = request.form.get('prefix')
+
+    if not all([protocol, process_id, prefix]):
+        # flash("Error: Missing parameters for IGP withdrawal.", "error")
+        return redirect(url_for('index'))
+
+    output = withdraw_igp_route(prefix, protocol, process_id)
+    # flash(f"IGP withdrawal command sent. Router output: {output}")
+    return redirect(url_for('index'))
+
 
 @app.route('/influence_igp', methods=['POST'])
 def influence_igp():
@@ -198,6 +251,9 @@ def influence_bgp():
         output = deprioritize_route_for_neighbor(neighbor_ip, prefix)
     elif action == 'more_specific':
         output = influence_neighbor_with_more_specific(neighbor_ip, prefix)
+    elif action == 'set_community':
+        communities = request.form.get('communities')
+        output = set_community_for_neighbor(neighbor_ip, prefix, communities)
     else:
         output = "Invalid influence action."
 

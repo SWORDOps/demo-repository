@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 import os
 
 def get_db_connection():
@@ -10,14 +11,12 @@ def get_db_connection():
     # Default to a local instance if not set, for convenience
     uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
 
-    client = MongoClient(uri, serverSelectionTimeoutMS=5000) # Set a timeout
-    try:
-        # The ismaster command is cheap and does not require auth.
-        client.admin.command('ismaster')
-    except ConnectionFailure:
-        print("Server not available")
-        # You might want to return None or raise an exception here
-        # For the app, we'll let the higher-level try/except handle it
+    # It's better to let the caller handle the exception
+    # so they know the database connection failed.
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+
+    # The ismaster command is cheap and does not require auth, used to check connection.
+    client.admin.command('ismaster')
 
     db = client.bgp_monitoring
     return db
