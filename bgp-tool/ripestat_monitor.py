@@ -217,5 +217,4 @@ if __name__ == '__main__':
             else:
                 print("No automation policies defined. Manual intervention required.")
 
-        # Wait for 5 minutes before the next check
-        time.sleep(300)
+        # Wait for
