@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box">
+    <div class="Box-header">
+        <h2 class="Box-title">Analytics Dashboard</h2>
+    </div>
+    <div class="Box-body">
+        {% if db_error %}
+        <div class="flash flash-error mb-3">
+            <strong>Database Error:</strong> {{ db_error }}
+        </div>
+        {% endif %}
+        <p>This dashboard provides insights into historical hijack activity, helping to identify trends and bad actors.</p>
+    </div>
+</div>
+
+<div class="d-flex flex-items-start mt-4" style="gap: 24px;">
+    <!-- Left Column: Time Series Chart -->
+    <div class="flex-auto Box">
+        <div class="Box-header">
+            <h3 class="Box-title">Hijacks Over Last 30 Days</h3>
+        </div>
+        <div class="Box-body">
+            <canvas id="hijacksOverTimeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Right Column: Top Offenders -->
+    <div style="width: 320px;" class="Box">
+        <div class="Box-header">
+            <h3 class="Box-title">Top 10 Offending ASNs</h3>
+        </div>
+        {% if top_offenders %}
+        <div class="Box-body--no-padding">
+            <table class="table-striped table-responsive" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>ASN</th>
+                        <th class="text-right">Hijack Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for offender in top_offenders %}
+                    <tr>
+                        <td><code>AS{{ offender._id }}</code></td>
+                        <td class="text-right">{{ offender.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="Box-body">
+            <p class="text-center">No offender data available yet.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Chart.js and Moment.js for date handling -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0"></script>
+
+<script>
+    // Data passed from Flask
+    const hijacksData = JSON.parse('{{ hijacks_over_time | safe }}');
+
+    // Prepare data for the chart
+    const labels = hijacksData.map(item => item._id);
+    const data = hijacksData.map(item => item.count);
+
+    const ctx = document.getElementById('hijacksOverTimeChart').getContext('2d');
+
+    // Chart.js dark mode configuration
+    Chart.defaults.color = 'rgba(255, 255, 255, 0.7)';
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.2)';
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Hijacks per Day',
+                data: data,
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'day',
+                        tooltipFormat: 'll'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Number of Hijacks'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

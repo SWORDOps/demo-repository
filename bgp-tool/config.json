@@ -1,12 +1,34 @@
 {
     "monitored_prefixes": [
-        "192.0.2.0/24"
+        "192.0.2.0/24",
+        "203.0.113.0/24"
     ],
     "authorized_as": 64496,
-    "auto_mitigate": false,
     "prepend_on_mitigate": true,
     "prepend_count": 3,
     "rtbh_communities": [
         "65535:666"
+    ],
+    "automation_policies": [
+        {
+            "name": "Default RPKI-Invalid Mitigation",
+            "conditions": {
+                "rpki_status": "invalid"
+            },
+            "actions": [
+                "announce_more_specific"
+            ]
+        },
+        {
+            "name": "Critical Prefix RTBH",
+            "conditions": {
+                "prefix": "192.0.2.0/24",
+                "rpki_status": "invalid"
+            },
+            "actions": [
+                "announce_more_specific",
+                "signal_rtbh"
+            ]
+        }
     ]
 }

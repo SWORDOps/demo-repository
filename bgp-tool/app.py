@@ -1,10 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for
-from datetime import datetime
+from datetime import datetime, timedelta
 from netmiko import ConnectHandler
 import os
 from dotenv import load_dotenv
 import subprocess
 import atexit
+from bson import json_util
 
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
@@ -98,6 +99,28 @@ def history():
     all_hijacks = list(db.hijack_alerts.find().sort('timestamp', -1))
     return render_template('history.html', hijack_alerts=all_hijacks)
 
+@app.route('/automation_log')
+def automation_log():
+    db = get_db_connection()
+    logs = list(db.automation_log.find().sort('timestamp', -1))
+    return render_template('automation_log.html', logs=logs)
+
+import requests
+
+RPKI_API_URL = "https://stat.ripe.net/data/rpki-validation/data.json"
+
+def get_rpki_status(prefix, asn):
+    """Gets the RPKI validation status for a prefix and ASN."""
+    params = {'resource': asn, 'prefix': prefix}
+    try:
+        response = requests.get(RPKI_API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('data', {}).get('validating_roas', [{}])[0].get('validity', 'not-found')
+    except (requests.exceptions.RequestException, IndexError) as e:
+        print(f"Error querying RPKI API: {e}")
+        return "error"
+
 @app.route('/rpki_helper')
 def rpki_helper():
     config = load_config()
@@ -112,8 +135,77 @@ def rpki_helper():
         })
 
     return render_template('rpki_helper.html', rpki_data=rpki_data)
-
 from mitigation import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki
+    return render_template('rpki_helper.html', rpki_data=rpki_data, config=config)
+
+@app.route('/analytics')
+def analytics():
+    hijacks_over_time = []
+    top_offenders = []
+    db_error = None
+
+    try:
+        db = get_db_connection()
+
+        # Time-series data for hijacks over the last 30 days
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        hijacks_over_time = list(db.hijack_alerts.aggregate([
+            {'$match': {'timestamp': {'$gte': thirty_days_ago}}},
+            {'$group': {
+                '_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp'}},
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'_id': 1}}
+        ]))
+
+        # Top 10 offending ASNs
+        top_offenders = list(db.hijack_alerts.aggregate([
+            {'$group': {
+                '_id': '$hijacking_as',
+                'count': {'$sum': 1}
+            }},
+            {'$sort': {'count': -1}},
+            {'$limit': 10}
+        ]))
+    except Exception as e:
+        db_error = f"Error connecting to the database: {e}"
+
+    # Convert BSON to JSON serializable format
+    hijacks_json = json.dumps(hijacks_over_time)
+
+    return render_template('analytics.html',
+                           hijacks_over_time=hijacks_json,
+                           top_offenders=top_offenders,
+                           db_error=db_error)
+
+from mitigation_logic import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki, apply_flowspec_rule, withdraw_flowspec_rule, deploy_eem_sentry
+
+@app.route('/on_router_defense', methods=['GET', 'POST'])
+def on_router_defense():
+    config = load_config()
+    output = None
+    if request.method == 'POST':
+        prefix = request.form.get('prefix')
+        unauthorized_asns_str = request.form.get('unauthorized_asns')
+        unauthorized_asns = [asn.strip() for asn in unauthorized_asns_str.split(',')]
+        output = deploy_eem_sentry(prefix, unauthorized_asns)
+
+    return render_template('on_router_defense.html', config=config, output=output)
+
+@app.route('/flowspec', methods=['POST'])
+def flowspec():
+    source_prefix = request.form.get('source_prefix')
+    dest_prefix = request.form.get('destination_prefix')
+    action = request.form.get('action')
+
+    if action == 'apply':
+        output = apply_flowspec_rule(source_prefix, dest_prefix)
+    elif action == 'withdraw':
+        output = withdraw_flowspec_rule(source_prefix, dest_prefix)
+    else:
+        output = "Invalid action."
+
+    return redirect(url_for('index', output=output))
 
 @app.route('/reroute', methods=['POST'])
 def reroute():
@@ -127,34 +219,48 @@ def reroute():
             output = challenge_with_rpki(prefix, bgp_asn)
         else:
             output = mitigate_hijack(prefix, bgp_asn)
+
+    bgp_asn = os.getenv('BGP_ASN')
+
+    if action == 'mitigate':
+        # The 'challenge_with_rpki' is now just a specific mitigation
+        output = mitigate_hijack(prefix, bgp_asn)
     elif action == 'withdraw_mitigation':
         output = withdraw_mitigation(prefix, bgp_asn)
     else:
-        # Manual advertise/withdraw
-        router_ip = request.form['router_ip']
-        username = request.form['username'] or os.getenv('ROUTER_USER')
-        password = request.form['password'] or os.getenv('ROUTER_PASSWORD')
-        bgp_asn_form = request.form['bgp_asn'] # Manual ASN from form
+        # Manual advertise/withdraw logic now uses the centralized action
+        bgp_asn_form = request.form['bgp_asn']
+        if not all([bgp_asn_form, prefix, action]):
+             return render_template('index.html', output="Error: BGP ASN and Prefix are required for manual action.")
 
-        if not all([router_ip, bgp_asn_form, prefix, action]) or not (username and password):
-            return render_template('index.html', output="Error: All fields are required for manual action.")
-
-        device = {
-            'device_type': 'cisco_ios',
-            'host': router_ip,
-            'username': username,
-            'password': password,
-        }
         config_commands = [
             f'router bgp {bgp_asn_form}',
             f'network {prefix}' if action == 'advertise' else f'no network {prefix}',
         ]
-        try:
-            with ConnectHandler(**device) as net_connect:
-                output = net_connect.send_config_set(config_commands)
-        except Exception as e:
-            output = str(e)
+        output = send_config_to_router(config_commands)
 
+    # To prevent breaking the UI, we'll just redirect to the index
+    # A better solution would be to use AJAX to display the output
+    return redirect(url_for('index', output=output))
+
+@app.route('/depeer', methods=['POST'])
+def depeer():
+    neighbor_ip = request.form.get('neighbor_ip')
+    output = depeer_neighbor(neighbor_ip)
+    return render_template('index.html', output=output)
+
+@app.route('/blackhole', methods=['POST'])
+def blackhole():
+    prefix = request.form.get('blackhole_prefix')
+    output = blackhole_route(prefix)
+    return render_template('index.html', output=output)
+
+@app.route('/rtbh', methods=['POST'])
+def rtbh():
+    prefix = request.form.get('prefix')
+    config = load_config()
+    communities = config.get('rtbh_communities', [])
+    output = signal_upstream(prefix, communities)
     return render_template('index.html', output=output)
 
 @app.route('/depeer', methods=['POST'])

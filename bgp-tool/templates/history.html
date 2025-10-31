@@ -1,42 +1,66 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BGP Hijack Alert History</title>
-    <link href="https://cdn.jsdelivr.net/npm/@primer/css@17.0.1/dist/primer.css" rel="stylesheet" />
-</head>
-<body class="p-4">
-    <div class="container-lg">
-        <div class="d-flex flex-justify-between flex-items-center">
-            <h1>BGP Hijack Alert History</h1>
-            <a href="/" class="btn">Back to Dashboard</a>
-        </div>
+{% extends "base.html" %}
 
-        {% if hijack_alerts %}
-        <table class="table table-striped mt-3">
+{% block title %}Alert History - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box">
+    <div class="Box-header">
+        <h2 class="Box-title">BGP Hijack Alert History</h2>
+    </div>
+    {% if hijack_alerts %}
+    <div class="Box-body--no-padding">
+        <table class="table-striped table-responsive" style="width: 100%;">
             <thead>
                 <tr>
+                    <th>Timestamp (UTC)</th>
                     <th>Monitored Prefix</th>
                     <th>Hijacking AS</th>
-                    <th>AS Path</th>
-                    <th>Timestamp</th>
+                    <th>Full AS Path</th>
+                    <th class="text-center">Abuse Score</th>
+                    <th class="text-center">RPKI Status</th>
+                    <th class="text-center">Sources</th>
                 </tr>
             </thead>
             <tbody>
                 {% for alert in hijack_alerts %}
                 <tr>
-                    <td>{{ alert.prefix }}</td>
-                    <td>{{ alert.hijacking_as }}</td>
-                    <td>{{ alert.path | join(' -> ') }}</td>
-                    <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
+                    <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><code>{{ alert.prefix }}</code></td>
+                    <td><code>{{ alert.hijacking_as }}</code></td>
+                    <td><code>{{ alert.path | join(' → ') }}</code></td>
+                    <td class="text-center">
+                        {% if alert.abuse_confidence_score is not none %}
+                            {% if alert.abuse_confidence_score > 75 %}<span class="Label Label--danger">{{ alert.abuse_confidence_score }}%</span>
+                            {% elif alert.abuse_confidence_score > 25 %}<span class="Label Label--warning">{{ alert.abuse_confidence_score }}%</span>
+                            {% else %}<span class="Label Label--success">{{ alert.abuse_confidence_score }}%</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="Label">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if alert.rpki_status == 'valid' %}<span class="Label Label--success">Valid</span>
+                        {% elif alert.rpki_status == 'invalid' %}<span class="Label Label--danger">Invalid</span>
+                        {% else %}<span class="Label">{{ alert.rpki_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% for source in alert.sources %}
+                        <span class="Label Label--info">{{ source }}</span>
+                        {% endfor %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <p class="mt-3">No BGP hijacks have been recorded.</p>
-        {% endif %}
     </div>
-</body>
-</html>
+    {% else %}
+    <div class="Box-body">
+        <div class="blankslate">
+            <h3 class="mb-1">No Hijack History</h3>
+            <p>The system has not recorded any hijack alerts yet.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

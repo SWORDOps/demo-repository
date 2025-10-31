@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Automation Log - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box">
+    <div class="Box-header">
+        <h2 class="Box-title">Automation Action Log</h2>
+    </div>
+    <div class="Box-body">
+        <p>This page shows a log of all actions taken automatically by the policy engine in response to detected threats.</p>
+    </div>
+    {% if logs %}
+    <div class="Box-body--no-padding">
+        <table class="table-striped table-responsive" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Timestamp (UTC)</th>
+                    <th>Policy Name</th>
+                    <th>Triggering Prefix</th>
+                    <th>Hijacking AS</th>
+                    <th>Actions Taken & Output</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><span class="Label">{{ log.policy_name }}</span></td>
+                    <td><code>{{ log.alert_prefix }}</code></td>
+                    <td><code>{{ log.hijacking_as }}</code></td>
+                    <td>
+                        <ul class="list-style-none">
+                            {% for action in log.actions_taken %}
+                            <li>
+                                <strong>{{ action.action | replace('_', ' ') | title }}:</strong>
+                                <pre class="border rounded-1 p-2 mt-1"><code>{{ action.output if action.output else "No output from router." }}</code></pre>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="Box-body">
+        <div class="blankslate">
+            <h3 class="mb-1">No Automated Actions Logged</h3>
+            <p>The policy engine has not yet taken any automated actions.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
