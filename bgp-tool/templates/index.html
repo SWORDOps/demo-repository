@@ -10,7 +10,21 @@
     <div class="container-md">
         <div class="d-flex flex-justify-between flex-items-center">
             <h1>BGP Active Defense Platform</h1>
-            <a href="/history" class="btn">View Full History</a>
+            <div>
+                <a href="/rpki_helper" class="btn">RPKI Helper</a>
+                <a href="/history" class="btn">View Full History</a>
+            </div>
+        </div>
+
+        <div class="border rounded-1 p-3 mt-4">
+            <h2>Internal Blackhole Routing</h2>
+            <form action="/blackhole" method="post" class="mt-3">
+                <div class="form-group">
+                    <label for="blackhole_prefix">Prefix to Blackhole</label>
+                    <input type="text" class="form-control" id="blackhole_prefix" name="blackhole_prefix" placeholder="e.g., 198.51.100.0/24" required>
+                </div>
+                <button type="submit" class="btn btn-danger mt-3">Create Blackhole</button>
+            </form>
         </div>
 
         <div class="border rounded-1 p-3 mt-4">
@@ -60,6 +74,7 @@
                     <th>Hijacking AS</th>
                     <th>AS Path</th>
                     <th>Timestamp</th>
+                    <th>RPKI Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -71,15 +86,33 @@
                     <td><a href="#">{{ alert.path | join(' -> ') }}</a></td>
                     <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
                     <td>
+                        {% if alert.rpki_status == 'valid' %}
+                        <span class="text-green">Valid</span>
+                        {% elif alert.rpki_status == 'invalid' %}
+                        <span class="text-red">Invalid</span>
+                        {% else %}
+                        <span class="text-gray">{{ alert.rpki_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <form action="/reroute" method="post" style="display: inline;">
                             <input type="hidden" name="prefix" value="{{ alert.prefix }}">
                             <input type="hidden" name="action" value="mitigate">
+                            <input type="hidden" name="rpki_status" value="{{ alert.rpki_status }}">
+                            {% if alert.rpki_status == 'invalid' %}
+                            <button type="submit" class="btn btn-danger btn-sm">Challenge with RPKI</button>
+                            {% else %}
                             <button type="submit" class="btn btn-danger btn-sm">Mitigate</button>
+                            {% endif %}
                         </form>
                         <form action="/reroute" method="post" style="display: inline;">
                             <input type="hidden" name="prefix" value="{{ alert.prefix }}">
                             <input type="hidden" name="action" value="withdraw_mitigation">
                             <button type="submit" class="btn btn-secondary btn-sm">Withdraw</button>
+                        </form>
+                        <form action="/rtbh" method="post" style="display: inline;">
+                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
+                            <button type="submit" class="btn btn-warning btn-sm">Signal Upstream</button>
                         </form>
                     </td>
                 </tr>
@@ -126,6 +159,7 @@
                     <th>AS</th>
                     <th>Up/Down</th>
                     <th>State/PfxRcd</th>
+                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -136,6 +170,12 @@
                     <td>{{ neighbor.remote_as }}</td>
                     <td>{{ neighbor.up_down }}</td>
                     <td>{{ neighbor.state_pfxrcd }}</td>
+                    <td>
+                        <form action="/depeer" method="post" style="display: inline;">
+                            <input type="hidden" name="neighbor_ip" value="{{ neighbor.neighbor }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Tear Down Session</button>
+                        </form>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

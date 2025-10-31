@@ -26,6 +26,20 @@ PREPEND_COUNT = config.get('prepend_count', 3)
 
 RIPE_API_URL = "https://stat.ripe.net/data/bgp-state/data.json"
 
+RPKI_API_URL = "https://stat.ripe.net/data/rpki-validation/data.json"
+
+def get_rpki_status(prefix, asn):
+    """Gets the RPKI validation status for a prefix and ASN."""
+    params = {'resource': asn, 'prefix': prefix}
+    try:
+        response = requests.get(RPKI_API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('data', {}).get('validating_roas', [{}])[0].get('validity', 'not-found')
+    except (requests.exceptions.RequestException, IndexError) as e:
+        print(f"Error querying RPKI API: {e}")
+        return "error"
+
 def check_for_hijacks():
     alerts = []
     for prefix in MONITORED_PREFIXES:
@@ -38,11 +52,13 @@ def check_for_hijacks():
             for state in data.get('data', {}).get('bgp_state', []):
                 path = state.get('path', [])
                 if path and path[-1] != AUTHORIZED_AS:
+                    rpki_status = get_rpki_status(prefix, path[-1])
                     alerts.append({
                         'prefix': prefix,
                         'hijacking_as': path[-1],
                         'path': path,
-                        'timestamp': time.time()
+                        'timestamp': time.time(),
+                        'rpki_status': rpki_status
                     })
         except requests.exceptions.RequestException as e:
             print(f"Error querying RIPEstat API: {e}")
