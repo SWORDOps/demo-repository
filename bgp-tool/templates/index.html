@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 {% extends "base.html" %}
 
 {% block title %}Dashboard - BGP Active Defense{% endblock %}
@@ -94,8 +93,8 @@
                 <div class="Box">
                     <div class="Box-header"><h3 class="Box-title">Manual Actions</h3></div>
                     <div class="Box-body">
-                        <details class="details-reset details-overlay">
-                            <summary class="btn btn-primary" style="width: 100%;">Blackhole Route</summary>
+                        <details class="details-reset details-overlay mb-2">
+                            <summary class="btn" style="width: 100%;">Blackhole Route</summary>
                             <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
                                 <div class="Box-header">
                                     <h3 class="Box-title">Internal Blackhole</h3>
@@ -104,6 +103,25 @@
                                     <p class="text-small text-gray mb-2">Create a null-route to drop traffic for a specific prefix internally.</p>
                                     <input type="text" class="form-control" name="blackhole_prefix" placeholder="198.51.100.0/24" required>
                                     <button type="submit" class="btn btn-danger mt-3" style="width: 100%;">Create Blackhole</button>
+                                </form>
+                            </div>
+                        </details>
+                        <details class="details-reset details-overlay">
+                            <summary class="btn btn-danger" style="width: 100%;">BGP Flowspec Block</summary>
+                            <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
+                                <div class="Box-header">
+                                    <h3 class="Box-title">Apply Flowspec Rule</h3>
+                                </div>
+                                <form action="/flowspec" method="post" class="Box-body">
+                                    <p class="text-small text-gray mb-2">Block traffic using BGP Flowspec. Specify source, destination, or both.</p>
+                                    <label for="source_prefix">Source Prefix</label>
+                                    <input type="text" class="form-control mb-2" name="source_prefix" placeholder="e.g., 203.0.113.0/24">
+                                    <label for="destination_prefix">Destination Prefix</label>
+                                    <input type="text" class="form-control" name="destination_prefix" placeholder="e.g., 198.51.100.0/24">
+                                    <div class="d-flex flex-justify-between mt-3">
+                                        <button type="submit" name="action" value="apply" class="btn btn-danger">Apply Block</button>
+                                        <button type="submit" name="action" value="withdraw" class="btn btn-secondary">Withdraw Block</button>
+                                    </div>
                                 </form>
                             </div>
                         </details>
@@ -145,90 +163,6 @@
                         <form action="/depeer" method="post" class="d-inline-block">
                             <input type="hidden" name="neighbor_ip" value="{{ neighbor.neighbor }}">
                             <button type="submit" class="btn btn-sm btn-danger">De-peer</button>
-=======
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BGP Active Defense Platform</title>
-    <link href="https://cdn.jsdelivr.net/npm/@primer/css@17.0.1/dist/primer.css" rel="stylesheet" />
-</head>
-<body class="p-4">
-    <div class="container-md">
-        <div class="d-flex flex-justify-between flex-items-center">
-            <h1>BGP Active Defense Platform</h1>
-            <a href="/history" class="btn">View Full History</a>
-        </div>
-
-        <div class="border rounded-1 p-3 mt-4">
-            <h2>Configuration</h2>
-            <form action="/update_config" method="post" class="mt-3">
-                <div class="form-group">
-                    <div class="form-checkbox">
-                        <label>
-                            <input type="checkbox" name="auto_mitigate" {% if config.auto_mitigate %}checked{% endif %}>
-                            Auto-Mitigation Enabled
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group mt-3">
-                    <div class="form-checkbox">
-                        <label>
-                            <input type="checkbox" name="prepend_on_mitigate" {% if config.prepend_on_mitigate %}checked{% endif %}>
-                            Defensive AS_PATH Prepending
-                        </label>
-                    </div>
-                </div>
-                <div class="form-group mt-3">
-                    <label for="prepend_count">AS_PATH Prepend Count</label>
-                    <input type="number" class="form-control" id="prepend_count" name="prepend_count" value="{{ config.prepend_count }}">
-                </div>
-                <button type="submit" class="btn btn-primary mt-3">Update Configuration</button>
-            </form>
-        </div>
-
-        {% if db_error %}
-        <div class="alert alert-danger mt-3" role="alert">
-            <strong>Database Error:</strong> {{ db_error }}
-        </div>
-        {% endif %}
-        <div class="d-flex flex-justify-between flex-items-center mt-5">
-            <h2>BGP Hijack Alerts</h2>
-            <a href="/history" class="btn">View Full History</a>
-        </div>
-        {% if hijack_alerts %}
-        <div class="alert alert-danger" role="alert">
-            <strong>Warning!</strong> The following BGP hijacks have been detected:
-        </div>
-        <table class="table table-striped mt-3">
-            <thead>
-                <tr>
-                    <th>Monitored Prefix</th>
-                    <th>Hijacking AS</th>
-                    <th>AS Path</th>
-                    <th>Timestamp</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for alert in hijack_alerts %}
-                <tr>
-                    <td>{{ alert.prefix }}</td>
-                    <td>{{ alert.hijacking_as }}</td>
-                    <td><a href="#">{{ alert.path | join(' -> ') }}</a></td>
-                    <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
-                    <td>
-                        <form action="/reroute" method="post" style="display: inline;">
-                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
-                            <input type="hidden" name="action" value="mitigate">
-                            <button type="submit" class="btn btn-danger btn-sm">Mitigate</button>
-                        </form>
-                        <form action="/reroute" method="post" style="display: inline;">
-                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
-                            <input type="hidden" name="action" value="withdraw_mitigation">
-                            <button type="submit" class="btn btn-secondary btn-sm">Withdraw</button>
->>>>>>> main
                         </form>
                     </td>
                 </tr>
@@ -246,68 +180,3 @@
     {% endif %}
 </div>
 {% endblock %}
-        {% else %}
-        <p class="mt-3">No BGP hijacks detected.</p>
-        {% endif %}
-
-        <h2 class="mt-5">Recent BGP Flaps</h2>
-        {% if bgp_flaps %}
-        <table class="table table-striped mt-3">
-            <thead>
-                <tr>
-                    <th>Neighbor</th>
-                    <th>Previous State</th>
-                    <th>Current State</th>
-                    <th>Timestamp</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for flap in bgp_flaps %}
-                <tr>
-                    <td>{{ flap.neighbor }}</td>
-                    <td>{{ flap.previous_state }}</td>
-                    <td>{{ flap.current_state }}</td>
-                    <td>{{ flap.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="mt-3">No recent BGP flaps detected.</p>
-        {% endif %}
-
-        <h2 class="mt-5">BGP Summary</h2>
-        {% if bgp_summary %}
-        <table class="table table-striped mt-3">
-            <thead>
-                <tr>
-                    <th>Neighbor</th>
-                    <th>Version</th>
-                    <th>AS</th>
-                    <th>Up/Down</th>
-                    <th>State/PfxRcd</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for neighbor in bgp_summary %}
-                <tr>
-                    <td>{{ neighbor.neighbor }}</td>
-                    <td>{{ neighbor.version }}</td>
-                    <td>{{ neighbor.remote_as }}</td>
-                    <td>{{ neighbor.up_down }}</td>
-                    <td>{{ neighbor.state_pfxrcd }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="mt-3">No BGP summary data available. The monitor may be starting up or unable to connect.</p>
-        {% endif %}
-
-
-        <h2 class="mt-5">Router Output</h2>
-        <pre class="border p-3 mt-3"><code>{{ output | safe if output }}</code></pre>
-    </div>
-</body>
-</html>
->>>>>>> main

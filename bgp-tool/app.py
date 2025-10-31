@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 import subprocess
 import atexit
 from bson import json_util
-import requests
-import json
 
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
@@ -20,6 +18,7 @@ def _jinja2_filter_datetime(date, fmt=None):
         date = datetime.fromtimestamp(date)
     return date.strftime(fmt or '%Y-%m-%d %H:%M:%S')
 
+import json
 
 # In-memory store for BGP data
 bgp_summary_data = None
@@ -106,6 +105,7 @@ def automation_log():
     logs = list(db.automation_log.find().sort('timestamp', -1))
     return render_template('automation_log.html', logs=logs)
 
+import requests
 
 RPKI_API_URL = "https://stat.ripe.net/data/rpki-validation/data.json"
 
@@ -169,20 +169,41 @@ def analytics():
         db_error = f"Error connecting to the database: {e}"
 
     # Convert BSON to JSON serializable format
-    # FIX: Use json_util.dumps to handle BSON/datetime objects from MongoDB
-    hijacks_json = json_util.dumps(hijacks_over_time)
+    hijacks_json = json.dumps(hijacks_over_time)
 
     return render_template('analytics.html',
                            hijacks_over_time=hijacks_json,
                            top_offenders=top_offenders,
                            db_error=db_error)
 
-# FIX: Added send_config_to_router, as it is called in the /reroute 'else' block
-from mitigation_logic import (
-    mitigate_hijack, withdraw_mitigation, depeer_neighbor,
-    blackhole_route, signal_upstream, challenge_with_rpki,
-    send_config_to_router
-)
+from mitigation_logic import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki, apply_flowspec_rule, withdraw_flowspec_rule, deploy_eem_sentry
+
+@app.route('/on_router_defense', methods=['GET', 'POST'])
+def on_router_defense():
+    config = load_config()
+    output = None
+    if request.method == 'POST':
+        prefix = request.form.get('prefix')
+        unauthorized_asns_str = request.form.get('unauthorized_asns')
+        unauthorized_asns = [asn.strip() for asn in unauthorized_asns_str.split(',')]
+        output = deploy_eem_sentry(prefix, unauthorized_asns)
+
+    return render_template('on_router_defense.html', config=config, output=output)
+
+@app.route('/flowspec', methods=['POST'])
+def flowspec():
+    source_prefix = request.form.get('source_prefix')
+    dest_prefix = request.form.get('destination_prefix')
+    action = request.form.get('action')
+
+    if action == 'apply':
+        output = apply_flowspec_rule(source_prefix, dest_prefix)
+    elif action == 'withdraw':
+        output = withdraw_flowspec_rule(source_prefix, dest_prefix)
+    else:
+        output = "Invalid action."
+
+    return redirect(url_for('index', output=output))
 
 @app.route('/reroute', methods=['POST'])
 def reroute():
@@ -206,7 +227,6 @@ def reroute():
             f'router bgp {bgp_asn_form}',
             f'network {prefix}' if action == 'advertise' else f'no network {prefix}',
         ]
-        # This function is now imported from mitigation_logic
         output = send_config_to_router(config_commands)
 
     # To prevent breaking the UI, we'll just redirect to the index

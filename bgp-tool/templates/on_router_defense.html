@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}On-Router Defense - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box">
+    <div class="Box-header">
+        <h2 class="Box-title">On-Router Defense with EEM Sentries</h2>
+    </div>
+    <div class="Box-body">
+        <p class="mb-3">Deploy Cisco Embedded Event Manager (EEM) applets directly to your router. These "sentries" provide an additional layer of decentralized defense, watching for specific BGP announcements and logging a critical alert directly on the device if a hijack is detected.</p>
+        <p class="flash flash-warn">
+            <strong>Warning:</strong> Deploying an EEM applet makes a direct configuration change to your router. Ensure you understand the implications before proceeding.
+        </p>
+    </div>
+    <div class="Box-body">
+        <form action="{{ url_for('on_router_defense') }}" method="post">
+            <div class="form-group">
+                <div class="form-group-header">
+                    <label for="prefix">Monitored Prefix</label>
+                </div>
+                <div class="form-group-body">
+                    <select class="form-select" id="prefix" name="prefix">
+                        {% for p in config.monitored_prefixes %}
+                        <option value="{{ p }}">{{ p }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group mt-3">
+                <div class="form-group-header">
+                    <label for="unauthorized_asns">Unauthorized ASNs</label>
+                </div>
+                <div class="form-group-body">
+                    <input type="text" class="form-control" id="unauthorized_asns" name="unauthorized_asns" placeholder="e.g., 64497,64498" required>
+                    <p class="note">Enter a comma-separated list of ASNs that should NOT be originating the selected prefix.</p>
+                </div>
+            </div>
+
+            <div class="form-group mt-3">
+                <button type="submit" class="btn btn-danger">Deploy EEM Sentry</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if output %}
+<div class="Box mt-4">
+    <div class="Box-header">
+        <h3 class="Box-title">Deployment Output</h3>
+    </div>
+    <div class="Box-body">
+        <pre><code>{{ output }}</code></pre>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
