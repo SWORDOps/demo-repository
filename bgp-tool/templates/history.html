@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Alert History - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box">
+    <div class="Box-header">
+        <h2 class="Box-title">BGP Hijack Alert History</h2>
+    </div>
+    {% if hijack_alerts %}
+    <div class="Box-body--no-padding">
+        <table class="table-striped table-responsive" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Timestamp (UTC)</th>
+                    <th>Monitored Prefix</th>
+                    <th>Hijacking AS</th>
+                    <th>Full AS Path</th>
+                    <th class="text-center">Abuse Score</th>
+                    <th class="text-center">RPKI Status</th>
+                    <th class="text-center">Sources</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in hijack_alerts %}
+                <tr>
+                    <td>{{ alert.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td><code>{{ alert.prefix }}</code></td>
+                    <td><code>{{ alert.hijacking_as }}</code></td>
+                    <td><code>{{ alert.path | join(' → ') }}</code></td>
+                    <td class="text-center">
+                        {% if alert.abuse_confidence_score is not none %}
+                            {% if alert.abuse_confidence_score > 75 %}<span class="Label Label--danger">{{ alert.abuse_confidence_score }}%</span>
+                            {% elif alert.abuse_confidence_score > 25 %}<span class="Label Label--warning">{{ alert.abuse_confidence_score }}%</span>
+                            {% else %}<span class="Label Label--success">{{ alert.abuse_confidence_score }}%</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="Label">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if alert.rpki_status == 'valid' %}<span class="Label Label--success">Valid</span>
+                        {% elif alert.rpki_status == 'invalid' %}<span class="Label Label--danger">Invalid</span>
+                        {% else %}<span class="Label">{{ alert.rpki_status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% for source in alert.sources %}
+                        <span class="Label Label--info">{{ source }}</span>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="Box-body">
+        <div class="blankslate">
+            <h3 class="mb-1">No Hijack History</h3>
+            <p>The system has not recorded any hijack alerts yet.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

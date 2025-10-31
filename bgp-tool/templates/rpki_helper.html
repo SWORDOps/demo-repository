@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}RPKI Helper - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box">
+    <div class="Box-header">
+        <h2 class="Box-title">RPKI Configuration Helper</h2>
+    </div>
+    <div class="Box-body">
+        <p class="mb-3">This tool checks the current RPKI validation status for your monitored prefixes against your authorized ASN ({{ config.authorized_as }}). A status of "valid" means your Route Origin Authorizations (ROAs) are correctly configured. If you see "not-found" or "invalid", you should create or update your ROAs to protect your prefixes from being hijacked.</p>
+    </div>
+    {% if rpki_data %}
+    <div class="Box-body--no-padding">
+        <table class="table-striped table-responsive" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Monitored Prefix</th>
+                    <th class="text-center">RPKI Status</th>
+                    <th>Recommendation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in rpki_data %}
+                <tr>
+                    <td><code>{{ item.prefix }}</code></td>
+                    <td class="text-center">
+                        {% if item.status == 'valid' %}<span class="Label Label--success">Valid</span>
+                        {% elif item.status == 'invalid' %}<span class="Label Label--danger">Invalid</span>
+                        {% else %}<span class="Label">{{ item.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.status == 'valid' %}
+                            <span class="text-gray">Configuration is correct.</span>
+                        {% elif item.status == 'invalid' %}
+                            <strong>Action Required:</strong> The existing ROA is incorrect. Please update it to authorize AS{{ config.authorized_as }}.
+                        {% else %}
+                            <strong>Action Required:</strong> No valid ROA found. Please create one for this prefix authorizing AS{{ config.authorized_as }}.
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

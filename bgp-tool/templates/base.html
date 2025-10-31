@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" data-color-mode="dark" data-dark-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BGP Active Defense Platform{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/@primer/css@^20.0.0/dist/primer.css" rel="stylesheet" />
+    <style>
+        /* Custom styles for a better dark theme experience */
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div class="container-lg">
+        <header class="d-flex flex-justify-between flex-items-center mb-4">
+            <h1 class="h3">BGP Active Defense</h1>
+            <nav>
+                <a href="{{ url_for('index') }}" class="btn">Dashboard</a>
+                <a href="{{ url_for('automation_log') }}" class="btn">Automation Log</a>
+                <a href="{{ url_for('history') }}" class="btn">Alert History</a>
+                <a href="{{ url_for('analytics') }}" class="btn">Analytics</a>
+                <a href="{{ url_for('rpki_helper') }}" class="btn">RPKI Helper</a>
+            </nav>
+        </header>
+
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="mt-5 text-center text-small text-gray">
+            <p>BGP Active Defense Platform</p>
+        </footer>
+    </div>
+</body>
+</html>
