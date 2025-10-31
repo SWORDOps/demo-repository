@@ -158,6 +158,40 @@ def set_community_for_neighbor(neighbor_ip, prefix, communities):
 
     return send_config_to_router(commands)
 
+# --- BGP Neighbor Management Functions ---
+
+def shutdown_neighbor(neighbor_ip):
+    """Gracefully shuts down a BGP neighbor."""
+    bgp_asn = os.getenv('BGP_ASN')
+    commands = [
+        f'router bgp {bgp_asn}',
+        f' neighbor {neighbor_ip} shutdown',
+        'end'
+    ]
+    return send_config_to_router(commands)
+
+def activate_neighbor(neighbor_ip):
+    """Activates a BGP neighbor that was previously shut down."""
+    bgp_asn = os.getenv('BGP_ASN')
+    commands = [
+        f'router bgp {bgp_asn}',
+        f' no neighbor {neighbor_ip} shutdown',
+        'end'
+    ]
+    return send_config_to_router(commands)
+
+def provision_neighbor(neighbor_ip, remote_as, description=""):
+    """Configures a new BGP neighbor on the router."""
+    bgp_asn = os.getenv('BGP_ASN')
+    commands = [
+        f'router bgp {bgp_asn}',
+        f' neighbor {neighbor_ip} remote-as {remote_as}',
+    ]
+    if description:
+        commands.append(f' neighbor {neighbor_ip} description {description}')
+    commands.append('end')
+    return send_config_to_router(commands)
+
 import re
 
 # Define constants for our specific IGP injection method
@@ -481,35 +515,6 @@ def deprioritize_route_for_neighbor(neighbor_ip, prefix, prepend_count=10):
     prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
     neighbor_sanitized = neighbor_ip.replace('.', '_')
     route_map_name = f"DEPRIORITIZE_{prefix_sanitized}_{neighbor_sanitized}"
-
-    commands = [
-        # Create an ACL to match the specific prefix
-        f'ip prefix-list PL_{prefix_sanitized} permit {prefix}',
-        # Create the route-map
-        f'route-map {route_map_name} permit 10',
-        f' match ip address prefix-list PL_{prefix_sanitized}',
-        f' set as-path prepend {" ".join([str(bgp_asn)] * prepend_count)}',
-        'exit',
-        # Create a second sequence to permit other routes without modification
-        f'route-map {route_map_name} permit 20',
-        'exit',
-        # Apply the route-map to the neighbor
-        f'router bgp {bgp_asn}',
-        f' neighbor {neighbor_ip} route-map {route_map_name} out',
-        'end'
-    ]
-
-    return send_config_to_router(commands)
-
-def poison_route_for_neighbor(neighbor_ip, prefix, prepend_count=10):
-    """
-    Applies heavy AS_PATH prepending for a specific prefix to a single neighbor.
-    """
-    bgp_asn = os.getenv('BGP_ASN')
-    # Sanitize inputs for command strings
-    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
-    neighbor_sanitized = neighbor_ip.replace('.', '_')
-    route_map_name = f"POISON_{prefix_sanitized}_{neighbor_sanitized}"
 
     commands = [
         # Create an ACL to match the specific prefix

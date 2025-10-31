@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}BGP Neighbor Management - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-items-start" style="gap: 24px;">
+    <!-- Left Column: Neighbor List -->
+    <div class="flex-auto">
+        <div class="Box">
+            <div class="Box-header">
+                <h2 class="Box-title">BGP Neighbors</h2>
+            </div>
+            {% if neighbors %}
+            <div class="Box-body--no-padding">
+                <table class="table-striped table-responsive" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Neighbor</th>
+                            <th>Description</th>
+                            <th>Remote AS</th>
+                            <th>State</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for neighbor in neighbors %}
+                        <tr>
+                            <td><code>{{ neighbor.neighbor }}</code></td>
+                            <td>{{ neighbor.description }}</td>
+                            <td><code>{{ neighbor.remote_as }}</code></td>
+                            <td>
+                                {% if neighbor.is_shutdown %}
+                                    <span class="Label Label--danger">Shutdown</span>
+                                {% elif neighbor.state_pfxrcd.isdigit() and neighbor.state_pfxrcd|int > 0 %}
+                                    <span class="Label Label--success">Established</span>
+                                {% else %}
+                                    <span class="Label Label--warning">{{ neighbor.state_pfxrcd }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                <form action="{{ url_for('neighbors') }}" method="post" class="d-inline-block">
+                                    <input type="hidden" name="neighbor_ip" value="{{ neighbor.neighbor }}">
+                                    {% if neighbor.is_shutdown %}
+                                        <input type="hidden" name="action" value="activate">
+                                        <button type="submit" class="btn btn-sm btn-success">Activate</button>
+                                    {% else %}
+                                        <input type="hidden" name="action" value="shutdown">
+                                        <button type="submit" class="btn btn-sm btn-warning">Shutdown</button>
+                                    {% endif %}
+                                </form>
+                                <form action="/depeer" method="post" class="d-inline-block">
+                                    <input type="hidden" name="neighbor_ip" value="{{ neighbor.neighbor }}">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to permanently de-peer this neighbor? This will remove the configuration.')">De-Peer</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="Box-body">
+                <div class="blankslate">
+                    <h3 class="mb-1">No BGP Neighbors Found</h3>
+                    <p>The BGP monitor may be starting up or has not found any configured neighbors.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <!-- Right Column: Provision New Neighbor -->
+    <div style="width: 320px;">
+        <div class="Box">
+            <div class="Box-header">
+                <h3 class="Box-title">Provision New Neighbor</h3>
+            </div>
+            <div class="Box-body">
+                <form action="{{ url_for('neighbors') }}" method="post">
+                    <input type="hidden" name="action" value="provision">
+                    <div class="form-group">
+                        <label for="neighbor_ip">Neighbor IP</label>
+                        <input type="text" class="form-control" name="neighbor_ip" placeholder="e.g., 1.1.1.1" required>
+                    </div>
+                    <div class="form-group mt-2">
+                        <label for="remote_as">Remote AS</label>
+                        <input type="text" class="form-control" name="remote_as" placeholder="e.g., 65535" required>
+                    </div>
+                    <div class="form-group mt-2">
+                        <label for="description">Description</label>
+                        <input type="text" class="form-control" name="description" placeholder="e.g., IXP Peer">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3" style="width: 100%;">Provision Neighbor</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
