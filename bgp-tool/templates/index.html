@@ -117,6 +117,57 @@
             </div>
             <!-- Right Column: Manual Actions -->
             <div style="width: 320px;">
+                <div class="Box mb-3">
+                    <div class="Box-header"><h3 class="Box-title">Route Influence Operations</h3></div>
+                    <div class="Box-body">
+                        <form action="/influence_bgp" method="post">
+                            <div class="form-group">
+                                <label for="neighbor_ip">Target BGP Neighbor</label>
+                                <select class="form-select" name="neighbor_ip" id="neighbor_ip">
+                                    {% if bgp_summary %}
+                                        {% for neighbor in bgp_summary %}
+                                        <option value="{{ neighbor.neighbor }}">{{ neighbor.neighbor }} (AS {{ neighbor.remote_as }})</option>
+                                        {% endfor %}
+                                    {% else %}
+                                        <option value="" disabled>No BGP neighbors found</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="form-group mt-2">
+                                <label for="prefix">Target Prefix</label>
+                                <input type="text" class="form-control" name="prefix" placeholder="e.g., 192.0.2.0/24" required>
+                            </div>
+                            <div class="form-group mt-2">
+                                <label for="action">Influence Action</label>
+                                <select class="form-select" name="action">
+                                    <option value="deprioritize">Deprioritize Route (AS_PATH Prepend)</option>
+                                    <option value="more_specific">Advertise More-Specific</option>
+                                </select>
+                            </div>
+                             <button type="submit" class="btn btn-primary mt-3" style="width: 100%;">Execute BGP Influence</button>
+                        </form>
+                        <hr>
+                        <h4 class="h5 mt-3">IGP Route Injection</h4>
+                        <form action="/influence_igp" method="post">
+                             <div class="form-group">
+                                <label for="igp_prefix">Prefix to Inject</label>
+                                <input type="text" class="form-control" id="igp_prefix" name="igp_prefix" placeholder="e.g., 10.10.10.0/24" required>
+                            </div>
+                            <div class="form-group mt-2">
+                                <label for="igp_protocol">IGP Protocol</label>
+                                <select class="form-select" name="igp_protocol">
+                                    <option value="ospf">OSPF</option>
+                                    <option value="eigrp">EIGRP</option>
+                                </select>
+                            </div>
+                            <div class="form-group mt-2">
+                                <label for="igp_process_id">IGP Process ID</label>
+                                <input type="text" class="form-control" name="igp_process_id" placeholder="e.g., 1 or 100" required>
+                            </div>
+                            <button type="submit" class="btn btn-warning mt-3" style="width: 100%;">Inject IGP Route</button>
+                        </form>
+                    </div>
+                </div>
                 <div class="Box">
                     <div class="Box-header"><h3 class="Box-title">Manual Actions</h3></div>
                     <div class="Box-body">

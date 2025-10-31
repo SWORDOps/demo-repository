@@ -127,6 +127,69 @@ def apply_flowspec_rule(source_prefix=None, dest_prefix=None):
 
     return send_config_to_router(commands)
 
+def inject_igp_route(prefix, protocol, process_id):
+    """
+    Injects a static route into an IGP process (OSPF or EIGRP) via redistribution.
+    """
+    try:
+        net = ip_network(prefix)
+    except (ValueError, Exception) as e:
+        return f"Error: Invalid prefix specified: {e}"
+
+    if protocol not in ['ospf', 'eigrp']:
+        return "Error: Invalid protocol specified. Must be 'ospf' or 'eigrp'."
+
+    commands = [
+        # Create a static route pointing to Null0. This route will be redistributed.
+        f'ip route {net.network_address} {net.netmask} Null0',
+        # Enter the router configuration for the specified IGP
+        f'router {protocol} {process_id}',
+        # Redistribute the static route into the IGP
+        'redistribute static',
+        'end'
+    ]
+
+    return send_config_to_router(commands)
+
+def influence_neighbor_with_more_specific(neighbor_ip, prefix):
+    """
+    Advertises more-specific prefixes to a single neighbor using a route-map.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    try:
+        net = ip_network(prefix)
+        subnets = list(net.subnets(new_prefix=net.prefixlen + 1))
+    except (ValueError, Exception) as e:
+        return f"Error creating subnets: {e}"
+
+    # Sanitize inputs for command strings
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    route_map_name = f"INFLUENCE_{prefix_sanitized}_{neighbor_sanitized}"
+    prefix_list_name = f"PL_MORE_SPECIFIC_{prefix_sanitized}"
+
+    commands = [
+        # Create the more-specific network statements so they exist in the BGP table
+        f'router bgp {bgp_asn}',
+    ]
+    commands.extend([f' network {sub.with_prefixlen}' for sub in subnets])
+    commands.extend([
+        'exit',
+        # Create a prefix-list to match the more-specifics
+        f'ip prefix-list {prefix_list_name} permit {subnets[0].with_prefixlen}',
+        f'ip prefix-list {prefix_list_name} permit {subnets[1].with_prefixlen}',
+        # Create the route-map to only permit the more-specifics
+        f'route-map {route_map_name} permit 10',
+        f' match ip address prefix-list {prefix_list_name}',
+        'exit',
+        # Apply the route-map to the neighbor
+        f'router bgp {bgp_asn}',
+        f' neighbor {neighbor_ip} route-map {route_map_name} out',
+        'end'
+    ])
+
+    return send_config_to_router(commands)
+
 def withdraw_flowspec_rule(source_prefix=None, dest_prefix=None):
     """Constructs commands to withdraw a BGP Flowspec rule."""
     if not source_prefix and not dest_prefix:
@@ -174,3 +237,62 @@ def deploy_eem_sentry(prefix, unauthorized_asns):
     ]
 
     return send_config_to_router(eem_script)
+
+def deprioritize_route_for_neighbor(neighbor_ip, prefix, prepend_count=10):
+    """
+    Applies heavy AS_PATH prepending for a specific prefix to a single neighbor
+    to make the route less preferable.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    # Sanitize inputs for command strings
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    route_map_name = f"DEPRIORITIZE_{prefix_sanitized}_{neighbor_sanitized}"
+
+    commands = [
+        # Create an ACL to match the specific prefix
+        f'ip prefix-list PL_{prefix_sanitized} permit {prefix}',
+        # Create the route-map
+        f'route-map {route_map_name} permit 10',
+        f' match ip address prefix-list PL_{prefix_sanitized}',
+        f' set as-path prepend {" ".join([str(bgp_asn)] * prepend_count)}',
+        'exit',
+        # Create a second sequence to permit other routes without modification
+        f'route-map {route_map_name} permit 20',
+        'exit',
+        # Apply the route-map to the neighbor
+        f'router bgp {bgp_asn}',
+        f' neighbor {neighbor_ip} route-map {route_map_name} out',
+        'end'
+    ]
+
+    return send_config_to_router(commands)
+
+def poison_route_for_neighbor(neighbor_ip, prefix, prepend_count=10):
+    """
+    Applies heavy AS_PATH prepending for a specific prefix to a single neighbor.
+    """
+    bgp_asn = os.getenv('BGP_ASN')
+    # Sanitize inputs for command strings
+    prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
+    neighbor_sanitized = neighbor_ip.replace('.', '_')
+    route_map_name = f"POISON_{prefix_sanitized}_{neighbor_sanitized}"
+
+    commands = [
+        # Create an ACL to match the specific prefix
+        f'ip prefix-list PL_{prefix_sanitized} permit {prefix}',
+        # Create the route-map
+        f'route-map {route_map_name} permit 10',
+        f' match ip address prefix-list PL_{prefix_sanitized}',
+        f' set as-path prepend {" ".join([str(bgp_asn)] * prepend_count)}',
+        'exit',
+        # Create a second sequence to permit other routes without modification
+        f'route-map {route_map_name} permit 20',
+        'exit',
+        # Apply the route-map to the neighbor
+        f'router bgp {bgp_asn}',
+        f' neighbor {neighbor_ip} route-map {route_map_name} out',
+        'end'
+    ]
+
+    return send_config_to_router(commands)

@@ -178,7 +178,30 @@ def analytics():
                            top_offenders=top_offenders,
                            db_error=db_error)
 
-from mitigation_logic import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki, apply_flowspec_rule, withdraw_flowspec_rule, deploy_eem_sentry
+from mitigation_logic import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki, apply_flowspec_rule, withdraw_flowspec_rule, deploy_eem_sentry, deprioritize_route_for_neighbor, influence_neighbor_with_more_specific, inject_igp_route
+
+@app.route('/influence_igp', methods=['POST'])
+def influence_igp():
+    prefix = request.form.get('igp_prefix')
+    protocol = request.form.get('igp_protocol')
+    process_id = request.form.get('igp_process_id')
+    output = inject_igp_route(prefix, protocol, process_id)
+    return redirect(url_for('index', output=output))
+
+@app.route('/influence_bgp', methods=['POST'])
+def influence_bgp():
+    neighbor_ip = request.form.get('neighbor_ip')
+    prefix = request.form.get('prefix')
+    action = request.form.get('action')
+
+    if action == 'deprioritize':
+        output = deprioritize_route_for_neighbor(neighbor_ip, prefix)
+    elif action == 'more_specific':
+        output = influence_neighbor_with_more_specific(neighbor_ip, prefix)
+    else:
+        output = "Invalid influence action."
+
+    return redirect(url_for('index', output=output))
 
 @app.route('/on_router_defense', methods=['GET', 'POST'])
 def on_router_defense():
