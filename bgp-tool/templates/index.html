@@ -1,32 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BGP Active Defense Platform</title>
-    <link href="https://cdn.jsdelivr.net/npm/@primer/css@17.0.1/dist/primer.css" rel="stylesheet" />
-</head>
-<body class="p-4">
-    <div class="container-md">
-        <div class="d-flex flex-justify-between flex-items-center">
-            <h1>BGP Active Defense Platform</h1>
-            <div>
-                <a href="/rpki_helper" class="btn">RPKI Helper</a>
-                <a href="/history" class="btn">View Full History</a>
-            </div>
-        </div>
-
-        <div class="border rounded-1 p-3 mt-4">
-            <h2>Internal Blackhole Routing</h2>
-            <form action="/blackhole" method="post" class="mt-3">
-                <div class="form-group">
-                    <label for="blackhole_prefix">Prefix to Blackhole</label>
-                    <input type="text" class="form-control" id="blackhole_prefix" name="blackhole_prefix" placeholder="e.g., 198.51.100.0/24" required>
-                </div>
-                <button type="submit" class="btn btn-danger mt-3">Create Blackhole</button>
-            </form>
-        </div>
 {% extends "base.html" %}
+
 {% block title %}Dashboard - BGP Active Defense{% endblock %}
 
 {% block content %}
@@ -273,137 +246,33 @@
         <table class="table-striped table-responsive" style="width: 100%;">
             <thead>
                 <tr>
-                    <th>Monitored Prefix</th>
-                    <th>Hijacking AS</th>
-                    <th>AS Path</th>
-                    <th>Timestamp</th>
-                    <th>RPKI Status</th>
-                    <th>Action</th>
                     <th>Neighbor</th>
+                    <th>Description</th>
                     <th>AS</th>
                     <th>Up/Down</th>
                     <th>State/PfxRcd</th>
-                    <th class="text-right">Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for neighbor in bgp_summary %}
                 <tr>
                     <td><code>{{ neighbor.neighbor }}</code></td>
+                    <td>{{ neighbor.description }}</td>
                     <td><code>{{ neighbor.remote_as }}</code></td>
                     <td>{{ neighbor.up_down }}</td>
                     <td>
-                        {% if alert.rpki_status == 'valid' %}
-                        <span class="text-green">Valid</span>
-                        {% elif alert.rpki_status == 'invalid' %}
-                        <span class="text-red">Invalid</span>
+                        {% if neighbor.is_shutdown %}
+                            <span class="Label Label--danger">Shutdown</span>
+                        {% elif neighbor.state_pfxrcd.isdigit() and neighbor.state_pfxrcd|int > 0 %}
+                            <span class="Label Label--success">{{ neighbor.state_pfxrcd }}</span>
                         {% else %}
-                        <span class="text-gray">{{ alert.rpki_status }}</span>
+                            <span class="Label Label--warning">{{ neighbor.state_pfxrcd }}</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <form action="/reroute" method="post" style="display: inline;">
-                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
-                            <input type="hidden" name="action" value="mitigate">
-                            <input type="hidden" name="rpki_status" value="{{ alert.rpki_status }}">
-                            {% if alert.rpki_status == 'invalid' %}
-                            <button type="submit" class="btn btn-danger btn-sm">Challenge with RPKI</button>
-                            {% else %}
-                            <button type="submit" class="btn btn-danger btn-sm">Mitigate</button>
-                            {% endif %}
-                        </form>
-                        <form action="/reroute" method="post" style="display: inline;">
-                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
-                            <input type="hidden" name="action" value="withdraw_mitigation">
-                            <button type="submit" class="btn btn-secondary btn-sm">Withdraw</button>
-                        {% if neighbor.state_pfxrcd.isdigit() and neighbor.state_pfxrcd|int > 0 %}
-                        <span class="Label Label--success">{{ neighbor.state_pfxrcd }}</span>
-                        {% else %}
-                        <span class="Label Label--warning">{{ neighbor.state_pfxrcd }}</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-right">
-                        <form action="/depeer" method="post" class="d-inline-block">
-                            <input type="hidden" name="neighbor_ip" value="{{ neighbor.neighbor }}">
-                            <button type="submit" class="btn btn-sm btn-danger">De-peer</button>
-                        </form>
-                        <form action="/rtbh" method="post" style="display: inline;">
-                            <input type="hidden" name="prefix" value="{{ alert.prefix }}">
-                            <button type="submit" class="btn btn-warning btn-sm">Signal Upstream</button>
-                        </form>
-                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <p class="mt-3">No BGP hijacks detected.</p>
-        {% endif %}
-
-        <h2 class="mt-5">Recent BGP Flaps</h2>
-        {% if bgp_flaps %}
-        <table class="table table-striped mt-3">
-            <thead>
-                <tr>
-                    <th>Neighbor</th>
-                    <th>Previous State</th>
-                    <th>Current State</th>
-                    <th>Timestamp</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for flap in bgp_flaps %}
-                <tr>
-                    <td>{{ flap.neighbor }}</td>
-                    <td>{{ flap.previous_state }}</td>
-                    <td>{{ flap.current_state }}</td>
-                    <td>{{ flap.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="mt-3">No recent BGP flaps detected.</p>
-        {% endif %}
-
-        <h2 class="mt-5">BGP Summary</h2>
-        {% if bgp_summary %}
-        <table class="table table-striped mt-3">
-            <thead>
-                <tr>
-                    <th>Neighbor</th>
-                    <th>Version</th>
-                    <th>AS</th>
-                    <th>Up/Down</th>
-                    <th>State/PfxRcd</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for neighbor in bgp_summary %}
-                <tr>
-                    <td>{{ neighbor.neighbor }}</td>
-                    <td>{{ neighbor.version }}</td>
-                    <td>{{ neighbor.remote_as }}</td>
-                    <td>{{ neighbor.up_down }}</td>
-                    <td>{{ neighbor.state_pfxrcd }}</td>
-                    <td>
-                        <form action="/depeer" method="post" style="display: inline;">
-                            <input type="hidden" name="neighbor_ip" value="{{ neighbor.neighbor }}">
-                            <button type="submit" class="btn btn-danger btn-sm">Tear Down Session</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="mt-3">No BGP summary data available. The monitor may be starting up or unable to connect.</p>
-        {% endif %}
-
-
-        <h2 class="mt-5">Router Output</h2>
-        <pre class="border p-3 mt-3"><code>{{ output | safe if output }}</code></pre>
     </div>
     {% else %}
     <div class="Box-body">
@@ -414,6 +283,7 @@
     </div>
     {% endif %}
 </div>
+
 <script>
     document.getElementById('bgp-action-select').addEventListener('change', function () {
         var communityInput = document.getElementById('community-input-group');

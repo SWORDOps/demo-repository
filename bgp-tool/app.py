@@ -144,8 +144,6 @@ def rpki_helper():
             'status': get_rpki_status(prefix, authorized_as)
         })
 
-    return render_template('rpki_helper.html', rpki_data=rpki_data)
-from mitigation import mitigate_hijack, withdraw_mitigation, depeer_neighbor, blackhole_route, signal_upstream, challenge_with_rpki
     return render_template('rpki_helper.html', rpki_data=rpki_data, config=config)
 
 @app.route('/analytics')
@@ -290,36 +288,16 @@ def flowspec():
 def reroute():
     action = request.form.get('action')
     prefix = request.form.get('prefix')
-    rpki_status = request.form.get('rpki_status')
-    bgp_asn = os.getenv('BGP_ASN') # BGP_ASN is now consistently from .env
-
-    if action == 'mitigate':
-        if rpki_status == 'invalid':
-            output = challenge_with_rpki(prefix, bgp_asn)
-        else:
-            output = mitigate_hijack(prefix, bgp_asn)
-
     bgp_asn = os.getenv('BGP_ASN')
 
     if action == 'mitigate':
-        # The 'challenge_with_rpki' is now just a specific mitigation
         output = mitigate_hijack(prefix, bgp_asn)
     elif action == 'withdraw_mitigation':
         output = withdraw_mitigation(prefix, bgp_asn)
     else:
-        # Manual advertise/withdraw logic now uses the centralized action
-        bgp_asn_form = request.form['bgp_asn']
-        if not all([bgp_asn_form, prefix, action]):
-             return render_template('index.html', output="Error: BGP ASN and Prefix are required for manual action.")
+        output = "Invalid action specified."
 
-        config_commands = [
-            f'router bgp {bgp_asn_form}',
-            f'network {prefix}' if action == 'advertise' else f'no network {prefix}',
-        ]
-        output = send_config_to_router(config_commands)
-
-    # To prevent breaking the UI, we'll just redirect to the index
-    # A better solution would be to use AJAX to display the output
+    # A better solution would be to use AJAX or flash messages to display the output
     return redirect(url_for('index', output=output))
 
 @app.route('/depeer', methods=['POST'])
@@ -342,25 +320,55 @@ def rtbh():
     output = signal_upstream(prefix, communities)
     return render_template('index.html', output=output)
 
-@app.route('/depeer', methods=['POST'])
-def depeer():
-    neighbor_ip = request.form.get('neighbor_ip')
-    output = depeer_neighbor(neighbor_ip)
-    return render_template('index.html', output=output)
+from audit_logic import find_orphaned_objects, cleanup_orphaned_objects, analyze_bgp_best_practices
+from mitigation_logic import provision_neighbor, shutdown_neighbor, activate_neighbor, send_config_to_router
 
-@app.route('/blackhole', methods=['POST'])
-def blackhole():
-    prefix = request.form.get('blackhole_prefix')
-    output = blackhole_route(prefix)
-    return render_template('index.html', output=output)
+@app.route('/neighbors', methods=['GET', 'POST'])
+def neighbors():
+    if request.method == 'POST':
+        action = request.form.get('action')
+        neighbor_ip = request.form.get('neighbor_ip')
 
-@app.route('/rtbh', methods=['POST'])
-def rtbh():
-    prefix = request.form.get('prefix')
-    config = load_config()
-    communities = config.get('rtbh_communities', [])
-    output = signal_upstream(prefix, communities)
-    return render_template('index.html', output=output)
+        if action == 'provision':
+            remote_as = request.form.get('remote_as')
+            description = request.form.get('description')
+            provision_neighbor(neighbor_ip, remote_as, description)
+        elif action == 'shutdown':
+            shutdown_neighbor(neighbor_ip)
+        elif action == 'activate':
+            activate_neighbor(neighbor_ip)
+
+        return redirect(url_for('neighbors'))
+
+    # For a GET request, we fetch the latest BGP summary data
+    db = get_db_connection()
+    all_neighbors = list(db.bgp_summary.aggregate([
+        {'$sort': {'timestamp': -1}},
+        {'$group': {
+            '_id': '$neighbor',
+            'doc': {'$first': '$$ROOT'}
+        }},
+        {'$replaceRoot': {'newRoot': '$doc'}}
+    ]))
+    return render_template('neighbors.html', neighbors=all_neighbors)
+
+@app.route('/auditing', methods=['GET', 'POST'])
+def auditing():
+    if request.method == 'POST':
+        # The only post action on this page is to clean up orphans
+        orphaned_route_maps = request.form.getlist('orphaned_route_maps')
+        orphaned_prefix_lists = request.form.getlist('orphaned_prefix_lists')
+        cleanup_orphaned_objects(orphaned_route_maps, orphaned_prefix_lists)
+        return redirect(url_for('auditing'))
+
+    # For a GET request, run the audits
+    config = send_config_to_router(['show running-config'])
+    orphaned_objects = find_orphaned_objects(config)
+    best_practice_analysis = analyze_bgp_best_practices(config)
+
+    return render_template('auditing.html',
+                           orphaned_objects=orphaned_objects,
+                           best_practice_analysis=best_practice_analysis)
 
 if __name__ == '__main__':
     app.run(debug=True)

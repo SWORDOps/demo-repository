@@ -1,5 +1,6 @@
 import time
 import os
+import re
 from netmiko import ConnectHandler
 from dotenv import load_dotenv
 from database import get_db_connection
@@ -9,9 +10,51 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 def get_bgp_summary(device):
+    """
+    Gets BGP summary, enriches it with description and shutdown status from the
+    running-config in a more robust way.
+    """
     with ConnectHandler(**device) as net_connect:
-        output = net_connect.send_command('show ip bgp summary', use_textfsm=True)
-    return output
+        summary_output = net_connect.send_command('show ip bgp summary', use_textfsm=True)
+        if not summary_output:
+            return None
+
+        run_config = net_connect.send_command('show running-config')
+
+        # Find the BGP configuration section
+        bgp_config_match = re.search(r"router bgp \d+([\s\S]*?)(?=^router|\Z)", run_config)
+        if not bgp_config_match:
+            return summary_output # Return basic summary if BGP config is missing
+
+        bgp_config = bgp_config_match.group(1)
+        neighbor_details = {}
+
+        # Process each neighbor individually
+        for neighbor_line in re.finditer(r"^\s*neighbor (\S+)", bgp_config, re.MULTILINE):
+            neighbor_ip = neighbor_line.group(1)
+
+            # Find the full configuration block for this specific neighbor
+            # This is more robust than a single, complex regex.
+            neighbor_block_regex = re.compile(rf"neighbor {re.escape(neighbor_ip)}[\s\S]*?(?=^ neighbor|\Z)")
+            block_match = neighbor_block_regex.search(bgp_config)
+
+            if block_match:
+                block = block_match.group(0)
+                desc_match = re.search(r"description (.*)", block)
+                is_shutdown = 'shutdown' in block
+
+                neighbor_details[neighbor_ip] = {
+                    'description': desc_match.group(1).strip() if desc_match else 'N/A',
+                    'is_shutdown': is_shutdown
+                }
+
+        # Enrich the summary output
+        for neighbor in summary_output:
+            details = neighbor_details.get(neighbor['neighbor'], {})
+            neighbor['description'] = details.get('description', 'N/A')
+            neighbor['is_shutdown'] = details.get('is_shutdown', False)
+
+    return summary_output
 
 if __name__ == '__main__':
     db = get_db_connection()

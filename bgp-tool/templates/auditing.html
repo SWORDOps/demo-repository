@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration Auditing - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box Box--spacious">
+    <div class="Box-header">
+        <h2 class="Box-title">Configuration Auditing</h2>
+    </div>
+
+    <!-- Configuration Hygiene -->
+    <div class="Box-row">
+        <h3 class="h4">Configuration Hygiene</h3>
+        <p class="text-gray">Scan for orphaned configuration objects (route-maps, prefix-lists) created by this tool that are no longer in use.</p>
+
+        {% if orphaned_objects and (orphaned_objects['route-maps'] or orphaned_objects['prefix-lists']) %}
+        <form action="{{ url_for('auditing') }}" method="post">
+            <div class="flash flash-warn mb-3">
+                <strong>Warning:</strong> The following orphaned objects were found. You can select them for removal.
+            </div>
+
+            {% if orphaned_objects['route-maps'] %}
+            <h4 class="h5">Orphaned Route-Maps</h4>
+            <ul class="list-style-none">
+                {% for rm in orphaned_objects['route-maps'] %}
+                <li>
+                    <label>
+                        <input type="checkbox" name="orphaned_route_maps" value="{{ rm }}" checked>
+                        <code>{{ rm }}</code>
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if orphaned_objects['prefix-lists'] %}
+            <h4 class="h5 mt-3">Orphaned Prefix-Lists</h4>
+            <ul class="list-style-none">
+                {% for pl in orphaned_objects['prefix-lists'] %}
+                <li>
+                    <label>
+                        <input type="checkbox" name="orphaned_prefix_lists" value="{{ pl }}" checked>
+                        <code>{{ pl }}</code>
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <button type="submit" class="btn btn-danger mt-3">Cleanup Selected Objects</button>
+        </form>
+        {% elif orphaned_objects %}
+        <div class="blankslate">
+            <h3 class="mb-1">No Orphaned Objects Found</h3>
+            <p>The configuration appears clean. No unused route-maps or prefix-lists created by this tool were detected.</p>
+        </div>
+        {% else %}
+        <div class="flash flash-error">
+            Could not perform audit. Error: {{ orphaned_objects.error }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- BGP Best Practices -->
+    <div class="Box-row">
+        <h3 class="h4">BGP Best Practice Analyzer</h3>
+        <p class="text-gray">Analyze the BGP configuration for adherence to common security best practices.</p>
+
+        {% if best_practice_analysis and best_practice_analysis.missing_max_prefix %}
+        <div class="flash flash-warn mb-3">
+            <strong>Security Warning:</strong> The following eBGP neighbors are missing the `maximum-prefix` setting. This is a critical security measure to prevent route leaks and resource exhaustion.
+        </div>
+        <div class="Box">
+            <table class="table-striped table-responsive" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Neighbor IP</th>
+                        <th>Remote AS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for peer in best_practice_analysis.missing_max_prefix %}
+                    <tr>
+                        <td><code>{{ peer.neighbor_ip }}</code></td>
+                        <td><code>{{ peer.remote_as }}</code></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% elif best_practice_analysis %}
+        <div class="blankslate">
+            <h3 class="mb-1">All Checks Passed</h3>
+            <p>All eBGP neighbors have the `maximum-prefix` setting configured. No issues found.</p>
+        </div>
+        {% else %}
+        <div class="flash flash-error">
+            Could not perform audit. Error: {{ best_practice_analysis.error }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
