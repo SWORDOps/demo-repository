@@ -3,26 +3,19 @@
 {% block title %}Dashboard - BGP Active Defense{% endblock %}
 
 {% block content %}
-<div class="Box Box--spacious">
-    <div class="Box-header">
-        <h2 class="Box-title">Platform Status & Actions</h2>
-    </div>
-    <div class="Box-body">
-        <div class="d-flex flex-items-start" style="gap: 24px;">
-            <!-- Left Column: Alerts -->
-            <div class="flex-auto">
-                {% if db_error %}
-                <div class="flash flash-error mb-3">
-                    <strong>Database Error:</strong> {{ db_error }}
-                </div>
-                {% endif %}
+<div class="d-flex flex-items-start" style="gap: 24px;">
+    <!-- Left Column: Alerts and Policies -->
+    <div class="flex-auto">
+        {% if db_error %}
+        <div class="flash flash-error mb-3">
+            <strong>Database Error:</strong> {{ db_error }}
+        </div>
+        {% endif %}
 
-                <h3 class="h4 mb-2">BGP Hijack Alerts</h3>
-                {% if hijack_alerts %}
-                <div class="flash flash-warn mb-3">
-                    <strong>Warning!</strong> The following BGP hijacks have been detected:
-                </div>
-                <div class="Box">
+        <div class="Box mb-4">
+            <div class="Box-header"><h2 class="Box-title">BGP Hijack Alerts</h2></div>
+            {% if hijack_alerts %}
+                <div class="Box-body--no-padding">
                     <table class="table-striped table-responsive" style="width: 100%;">
                         <thead>
                             <tr>
@@ -31,7 +24,7 @@
                                 <th class="text-center">Abuse Score</th>
                                 <th class="text-center">RPKI</th>
                                 <th class="text-center">Sources</th>
-                                <th>Actions</th>
+                                <th class="text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -61,19 +54,15 @@
                                     {% endfor %}
                                 </td>
                                 <td class="text-right">
-                                    <form action="/reroute" method="post" class="d-inline-block">
+                                    <form action="{{ url_for('main.reroute') }}" method="post" class="d-inline-block">
                                         <input type="hidden" name="prefix" value="{{ alert.prefix }}">
                                         <input type="hidden" name="action" value="mitigate">
                                         <button type="submit" class="btn btn-sm btn-danger">Mitigate</button>
                                     </form>
-                                    <form action="/reroute" method="post" class="d-inline-block">
+                                    <form action="{{ url_for('main.reroute') }}" method="post" class="d-inline-block">
                                         <input type="hidden" name="prefix" value="{{ alert.prefix }}">
                                         <input type="hidden" name="action" value="withdraw_mitigation">
                                         <button type="submit" class="btn btn-sm btn-secondary">Withdraw</button>
-                                    </form>
-                                    <form action="/rtbh" method="post" class="d-inline-block">
-                                        <input type="hidden" name="prefix" value="{{ alert.prefix }}">
-                                        <button type="submit" class="btn btn-sm btn-warning">RTBH</button>
                                     </form>
                                 </td>
                             </tr>
@@ -81,217 +70,141 @@
                         </tbody>
                     </table>
                 </div>
-                {% else %}
-                <div class="blankslate">
-                    <h3 class="mb-1">No Active Alerts</h3>
-                    <p>The network is currently clear of any detected BGP hijacks.</p>
+            {% else %}
+                <div class="Box-body">
+                    <div class="blankslate">
+                        <h3 class="mb-1">No Active Alerts</h3>
+                        <p>The network is currently clear of any detected BGP hijacks.</p>
+                    </div>
                 </div>
-                {% endif %}
-            </div>
-            <!-- Right Column: Manual Actions -->
-            <div style="width: 320px;">
-                <div class="Box mb-3">
-                    <div class="Box-header"><h3 class="Box-title">Route Influence Operations</h3></div>
-                    <div class="Box-body">
-                        <form action="/influence_bgp" method="post">
+            {% endif %}
+        </div>
+
+        <div class="Box">
+            <div class="Box-header"><h2 class="Box-title">Active Influence Policies</h2></div>
+            {% if active_policies.bgp or active_policies.igp %}
+                <div class="Box-body--no-padding">
+                    <table class="table-striped table-responsive" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Target</th>
+                                <th class="text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for policy in active_policies.bgp %}
+                            <tr>
+                                <td>{{ policy.type }}</td>
+                                <td>Neighbor <code>{{ policy.neighbor }}</code>, Prefix <code>{{ policy.prefix }}</code></td>
+                                <td class="text-right">
+                                    <form action="{{ url_for('main.withdraw_bgp_influence') }}" method="post" class="d-inline-block">
+                                        <input type="hidden" name="neighbor" value="{{ policy.neighbor }}">
+                                        <input type="hidden" name="prefix" value="{{ policy.prefix }}">
+                                        <input type="hidden" name="policy_type" value="{{ policy.type }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% for policy in active_policies.igp %}
+                            <tr>
+                                <td>{{ policy.type }}</td>
+                                <td>Protocol <code>{{ policy.protocol }} {{ policy.process_id }}</code>, Prefix <code>{{ policy.prefix }}</code></td>
+                                <td class="text-right">
+                                    <form action="{{ url_for('main.withdraw_igp_influence') }}" method="post" class="d-inline-block">
+                                        <input type="hidden" name="protocol" value="{{ policy.protocol }}">
+                                        <input type="hidden" name="process_id" value="{{ policy.process_id }}">
+                                        <input type="hidden" name="prefix" value="{{ policy.prefix }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="Box-body">
+                    <p class="text-center">No active influence policies created by this tool were found on the router.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Manual Actions -->
+    <div style="width: 320px;">
+        <div class="Box">
+            <div class="Box-header"><h3 class="Box-title">Manual Interventions</h3></div>
+            <div class="Box-body">
+                <details class="details-reset details-overlay mb-2">
+                    <summary class="btn" style="width: 100%;">Route Influence</summary>
+                    <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
+                        <div class="Box-header"><h3 class="Box-title">Route Influence Operations</h3></div>
+                        <form action="{{ url_for('main.influence_bgp') }}" method="post" class="Box-body">
+                            <h4 class="h5">BGP Influence</h4>
                             <div class="form-group">
                                 <label for="neighbor_ip">Target BGP Neighbor</label>
                                 <select class="form-select" name="neighbor_ip" id="neighbor_ip">
-                                    {% if bgp_summary %}
-                                        {% for neighbor in bgp_summary %}
-                                        <option value="{{ neighbor.neighbor }}">{{ neighbor.neighbor }} (AS {{ neighbor.remote_as }})</option>
-                                        {% endfor %}
-                                    {% else %}
-                                        <option value="" disabled>No BGP neighbors found</option>
-                                    {% endif %}
+                                    {% if bgp_summary %}{% for n in bgp_summary %}<option value="{{ n.neighbor }}">{{ n.neighbor }} (AS {{ n.remote_as }})</option>{% endfor %}{% else %}<option disabled>No neighbors</option>{% endif %}
                                 </select>
                             </div>
+                            <div class="form-group mt-2"><label for="prefix">Target Prefix</label><input type="text" class="form-control" name="prefix" placeholder="e.g., 192.0.2.0/24" required></div>
                             <div class="form-group mt-2">
-                                <label for="prefix">Target Prefix</label>
-                                <input type="text" class="form-control" name="prefix" placeholder="e.g., 192.0.2.0/24" required>
-                            </div>
-                            <div class="form-group mt-2">
-                                <label for="action">Influence Action</label>
+                                <label for="action">Action</label>
                                 <select class="form-select" name="action" id="bgp-action-select">
-                                    <option value="deprioritize">Deprioritize Route (AS_PATH Prepend)</option>
+                                    <option value="deprioritize">Deprioritize Route</option>
                                     <option value="more_specific">Advertise More-Specific</option>
                                     <option value="set_community">Set BGP Community</option>
                                 </select>
                             </div>
-                            <div id="community-input-group" class="form-group mt-2" style="display: none;">
-                                 <label for="communities">BGP Communities</label>
-                                 <input type="text" class="form-control" name="communities" placeholder="e.g., 65535:100 no-export">
-                            </div>
-                             <button type="submit" class="btn btn-primary mt-3" style="width: 100%;">Execute BGP Influence</button>
+                            <div id="community-input-group" style="display: none;" class="form-group mt-2"><label for="communities">BGP Communities</label><input type="text" class="form-control" name="communities" placeholder="e.g., 65535:100"></div>
+                            <button type="submit" class="btn btn-primary mt-3" style="width: 100%;">Execute</button>
                         </form>
                         <hr>
-                        <h4 class="h5 mt-3">IGP Route Injection</h4>
-                        <form action="/influence_igp" method="post">
-                             <div class="form-group">
-                                <label for="igp_prefix">Prefix to Inject</label>
-                                <input type="text" class="form-control" id="igp_prefix" name="igp_prefix" placeholder="e.g., 10.10.10.0/24" required>
-                            </div>
-                            <div class="form-group mt-2">
-                                <label for="igp_protocol">IGP Protocol</label>
-                                <select class="form-select" name="igp_protocol">
-                                    <option value="ospf">OSPF</option>
-                                    <option value="eigrp">EIGRP</option>
-                                </select>
-                            </div>
-                            <div class="form-group mt-2">
-                                <label for="igp_process_id">IGP Process ID</label>
-                                <input type="text" class="form-control" name="igp_process_id" placeholder="e.g., 1 or 100" required>
-                            </div>
-                            <button type="submit" class="btn btn-warning mt-3" style="width: 100%;">Inject IGP Route</button>
+                        <form action="{{ url_for('main.influence_igp') }}" method="post" class="Box-body">
+                             <h4 class="h5">IGP Route Injection</h4>
+                             <div class="form-group"><label for="igp_prefix">Prefix to Inject</label><input type="text" class="form-control" name="igp_prefix" placeholder="e.g., 10.10.10.0/24" required></div>
+                             <div class="form-group mt-2"><label for="igp_protocol">Protocol</label><select class="form-select" name="igp_protocol"><option value="ospf">OSPF</option><option value="eigrp">EIGRP</option></select></div>
+                             <div class="form-group mt-2"><label for="igp_process_id">Process ID</label><input type="text" class="form-control" name="igp_process_id" placeholder="e.g., 1 or 100" required></div>
+                             <button type="submit" class="btn btn-warning mt-3" style="width: 100%;">Inject</button>
                         </form>
                     </div>
-                </div>
-                <div class="Box">
-                    <div class="Box-header"><h3 class="Box-title">Manual Actions</h3></div>
-                    <div class="Box-body">
-                        <details class="details-reset details-overlay mb-2">
-                            <summary class="btn" style="width: 100%;">Blackhole Route</summary>
-                            <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
-                                <div class="Box-header">
-                                    <h3 class="Box-title">Internal Blackhole</h3>
-                                </div>
-                                <form action="/blackhole" method="post" class="Box-body">
-                                    <p class="text-small text-gray mb-2">Create a null-route to drop traffic for a specific prefix internally.</p>
-                                    <input type="text" class="form-control" name="blackhole_prefix" placeholder="198.51.100.0/24" required>
-                                    <button type="submit" class="btn btn-danger mt-3" style="width: 100%;">Create Blackhole</button>
-                                </form>
-                            </div>
-                        </details>
-                        <details class="details-reset details-overlay">
-                            <summary class="btn btn-danger" style="width: 100%;">BGP Flowspec Block</summary>
-                            <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
-                                <div class="Box-header">
-                                    <h3 class="Box-title">Apply Flowspec Rule</h3>
-                                </div>
-                                <form action="/flowspec" method="post" class="Box-body">
-                                    <p class="text-small text-gray mb-2">Block traffic using BGP Flowspec. Specify source, destination, or both.</p>
-                                    <label for="source_prefix">Source Prefix</label>
-                                    <input type="text" class="form-control mb-2" name="source_prefix" placeholder="e.g., 203.0.113.0/24">
-                                    <label for="destination_prefix">Destination Prefix</label>
-                                    <input type="text" class="form-control" name="destination_prefix" placeholder="e.g., 198.51.100.0/24">
-                                    <div class="d-flex flex-justify-between mt-3">
-                                        <button type="submit" name="action" value="apply" class="btn btn-danger">Apply Block</button>
-                                        <button type="submit" name="action" value="withdraw" class="btn btn-secondary">Withdraw Block</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </details>
+                </details>
+                <details class="details-reset details-overlay mb-2">
+                    <summary class="btn" style="width: 100%;">Blackhole Route</summary>
+                    <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
+                        <div class="Box-header"><h3 class="Box-title">Internal Blackhole</h3></div>
+                        <form action="{{ url_for('main.blackhole') }}" method="post" class="Box-body">
+                            <p class="text-small text-gray mb-2">Create a null-route to drop traffic for a specific prefix internally.</p>
+                            <input type="text" class="form-control" name="blackhole_prefix" placeholder="198.51.100.0/24" required>
+                            <button type="submit" class="btn btn-danger mt-3" style="width: 100%;">Create Blackhole</button>
+                        </form>
                     </div>
-                </div>
+                </details>
+                <details class="details-reset details-overlay">
+                    <summary class="btn btn-danger" style="width: 100%;">BGP Flowspec Block</summary>
+                    <div class="Box Box--overlay d-flex flex-column anim-fade-in fast" style="width: 300px">
+                        <div class="Box-header"><h3 class="Box-title">Apply Flowspec Rule</h3></div>
+                        <form action="{{ url_for('main.flowspec') }}" method="post" class="Box-body">
+                            <p class="text-small text-gray mb-2">Block traffic using BGP Flowspec.</p>
+                            <label for="source_prefix">Source</label><input type="text" class="form-control mb-2" name="source_prefix" placeholder="e.g., 203.0.113.0/24">
+                            <label for="destination_prefix">Destination</label><input type="text" class="form-control" name="destination_prefix" placeholder="e.g., 198.51.100.0/24">
+                            <div class="d-flex flex-justify-between mt-3">
+                                <button type="submit" name="action" value="apply" class="btn btn-danger">Apply</button>
+                                <button type="submit" name="action" value="withdraw" class="btn btn-secondary">Withdraw</button>
+                            </div>
+                        </form>
+                    </div>
+                </details>
             </div>
         </div>
     </div>
 </div>
 
-<div class="Box mt-4">
-    <div class="Box-header"><h2 class="Box-title">Active Influence Policies</h2></div>
-    {% if active_policies.bgp or active_policies.igp %}
-    <div class="Box-body--no-padding">
-        <table class="table-striped table-responsive" style="width: 100%;">
-            <thead>
-                <tr>
-                    <th>Type</th>
-                    <th>Target</th>
-                    <th class="text-right">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for policy in active_policies.bgp %}
-                <tr>
-                    <td>{{ policy.type }}</td>
-                    <td>Neighbor <code>{{ policy.neighbor }}</code>, Prefix <code>{{ policy.prefix }}</code></td>
-                    <td class="text-right">
-                        <form action="/withdraw_bgp_influence" method="post" class="d-inline-block">
-                            <input type="hidden" name="neighbor" value="{{ policy.neighbor }}">
-                            <input type="hidden" name="prefix" value="{{ policy.prefix }}">
-                            <input type="hidden" name="policy_type" value="{{ policy.type }}">
-                            <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                {% for policy in active_policies.igp %}
-                <tr>
-                    <td>{{ policy.type }}</td>
-                    <td>Protocol <code>{{ policy.protocol }} {{ policy.process_id }}</code>, Prefix <code>{{ policy.prefix }}</code></td>
-                    <td class="text-right">
-                        <form action="/withdraw_igp_influence" method="post" class="d-inline-block">
-                            <input type="hidden" name="protocol" value="{{ policy.protocol }}">
-                            <input type="hidden" name="process_id" value="{{ policy.process_id }}">
-                            <input type="hidden" name="prefix" value="{{ policy.prefix }}">
-                            <button type="submit" class="btn btn-sm btn-danger">Withdraw</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="Box-body">
-        <p class="text-center">No active influence policies created by this tool were found on the router.</p>
-    </div>
-    {% endif %}
-</div>
-
-<div class="Box mt-4">
-    <div class="Box-header"><h2 class="Box-title">BGP Summary</h2></div>
-    {% if bgp_summary %}
-    <div class="Box-body--no-padding">
-        <table class="table-striped table-responsive" style="width: 100%;">
-            <thead>
-                <tr>
-                    <th>Neighbor</th>
-                    <th>Description</th>
-                    <th>AS</th>
-                    <th>Up/Down</th>
-                    <th>State/PfxRcd</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for neighbor in bgp_summary %}
-                <tr>
-                    <td><code>{{ neighbor.neighbor }}</code></td>
-                    <td>{{ neighbor.description }}</td>
-                    <td><code>{{ neighbor.remote_as }}</code></td>
-                    <td>{{ neighbor.up_down }}</td>
-                    <td>
-                        {% if neighbor.is_shutdown %}
-                            <span class="Label Label--danger">Shutdown</span>
-                        {% elif neighbor.state_pfxrcd.isdigit() and neighbor.state_pfxrcd|int > 0 %}
-                            <span class="Label Label--success">{{ neighbor.state_pfxrcd }}</span>
-                        {% else %}
-                            <span class="Label Label--warning">{{ neighbor.state_pfxrcd }}</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="Box-body">
-        <div class="blankslate">
-            <h3 class="mb-1">No BGP Summary Data</h3>
-            <p>The monitor may be starting up or unable to connect to the router.</p>
-        </div>
-    </div>
-    {% endif %}
-</div>
-
 <script>
     document.getElementById('bgp-action-select').addEventListener('change', function () {
-        var communityInput = document.getElementById('community-input-group');
-        if (this.value === 'set_community') {
-            communityInput.style.display = 'block';
-        } else {
-            communityInput.style.display = 'none';
-        }
+        document.getElementById('community-input-group').style.display = this.value === 'set_community' ? 'block' : 'none';
     });
 </script>
 {% endblock %}

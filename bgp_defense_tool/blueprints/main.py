@@ -248,7 +248,11 @@ def auditing():
         orphaned_prefix_lists = request.form.getlist('orphaned_prefix_lists')
         cleanup_orphaned_objects(orphaned_route_maps, orphaned_prefix_lists)
         return redirect(url_for('main.auditing'))
-    config = get_active_influence_policies() # Re-using this to get config
+
+    # Correctly fetch the running configuration for the audit
+    from ..logic.mitigation_logic import send_config_to_router
+    config = send_config_to_router(['show running-config'])
+
     orphaned_objects = find_orphaned_objects(config)
     best_practice_analysis = analyze_bgp_best_practices(config)
     return render_template('auditing.html', orphaned_objects=orphaned_objects, best_practice_analysis=best_practice_analysis)

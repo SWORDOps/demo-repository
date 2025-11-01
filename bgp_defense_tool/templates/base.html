@@ -5,30 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}BGP Active Defense Platform{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/@primer/css@^20.0.0/dist/primer.css" rel="stylesheet" />
-    <style>
-        /* Custom styles for a better dark theme experience */
-        .table-striped tbody tr:nth-of-type(odd) {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }}">
 </head>
 <body class="p-4">
     <div class="container-lg">
-        <header class="d-flex flex-justify-between flex-items-center mb-4">
-            <h1 class="h3">BGP Active Defense</h1>
-            <nav>
-                <a href="{{ url_for('index') }}" class="btn">Dashboard</a>
-                <a href="{{ url_for('neighbors') }}" class="btn">Neighbors</a>
-                <a href="{{ url_for('auditing') }}" class="btn">Auditing</a>
-                <a href="{{ url_for('automation_log') }}" class="btn">Automation Log</a>
-                <a href="{{ url_for('history') }}" class="btn">Alert History</a>
-                <a href="{{ url_for('analytics') }}" class="btn">Analytics</a>
-                <a href="{{ url_for('on_router_defense') }}" class="btn">On-Router Defense</a>
-                <a href="{{ url_for('rpki_helper') }}" class="btn">RPKI Helper</a>
-            </nav>
+        <header class="Header">
+            <div class="Header-item">
+                <a href="{{ url_for('main.index') }}" class="Header-link f4 d-flex flex-items-center">
+                    <svg height="32" aria-hidden="true" viewBox="0 0 16 16" version="1.1" width="32" class="octicon octicon-shield-check mr-2">
+                        <path d="M8.525.225A.75.75 0 0 0 7.5.225L2.25 2.135V6.32c0 3.332 2.331 6.335 5.165 7.37a.75.75 0 0 0 .67 0c2.834-1.035 5.165-4.038 5.165-7.37V2.135L8.525.225Z M8 12.43a5.82 5.82 0 0 1-4.25-1.943A5.809 5.809 0 0 1 3.75 6.32V2.885l4.25-1.55v11.1Z"></path>
+                    </svg>
+                    <span>BGP Active Defense</span>
+                </a>
+            </div>
+            <div class="Header-item Header-item--full">
+                <nav class="UnderlineNav">
+                    <ul class="UnderlineNav-body">
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.index' %} selected{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.neighbors' %} selected{% endif %}" href="{{ url_for('main.neighbors') }}">Neighbors</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.auditing' %} selected{% endif %}" href="{{ url_for('main.auditing') }}">Auditing</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.automation_log' %} selected{% endif %}" href="{{ url_for('main.automation_log') }}">Automation Log</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.history' %} selected{% endif %}" href="{{ url_for('main.history') }}">Alert History</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.analytics' %} selected{% endif %}" href="{{ url_for('main.analytics') }}">Analytics</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.on_router_defense' %} selected{% endif %}" href="{{ url_for('main.on_router_defense') }}">On-Router Defense</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.rpki_helper' %} selected{% endif %}" href="{{ url_for('main.rpki_helper') }}">RPKI Helper</a></li>
+                    </ul>
+                </nav>
+            </div>
         </header>
 
-        <main>
+        <main class="mt-4">
             {% block content %}{% endblock %}
         </main>
 
