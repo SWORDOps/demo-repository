@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Hardware Recovery Tool - BGP Active Defense{% endblock %}
+
+{% block content %}
+<div class="Box Box--spacious">
+    <div class="Box-header">
+        <h2 class="Box-title">Hardware Recovery & Analysis Tool</h2>
+    </div>
+    <div class="Box-body">
+        <div class="flash flash-warn">
+            <strong>⚠️ Disclaimer:</strong> This tool contains dangerous features, especially for JTAG memory writing. It can cause irreversible damage to the target device. The user assumes all responsibility for any actions performed by this script. **Use with extreme caution.**
+        </div>
+
+        <h3 class="h4 mt-3">Instructions</h3>
+        <p>This page provides a monitoring interface for the <code>cisco_recovery.sh</code> script. The script itself must be run manually in a separate terminal with root privileges due to its requirement for low-level hardware access.</p>
+
+        <ol>
+            <li><strong>Open a new terminal.</strong></li>
+            <li><strong>Navigate to the project's <code>scripts</code> directory.</strong></li>
+            <li>
+                <strong>Run the script as root:</strong>
+                <pre><code>sudo ./cisco_recovery.sh</code></pre>
+            </li>
+            <li><strong>Follow the on-screen prompts in the TUI to perform recovery actions.</strong></li>
+            <li><strong>This page will automatically refresh to show the latest log output from the script.</strong></li>
+        </ol>
+    </div>
+</div>
+
+<div class="Box mt-4">
+    <div class="Box-header">
+        <h3 class="Box-title">Live Log Viewer</h3>
+    </div>
+    <div class="Box-body">
+        <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 6px;"><code>{{ log_content }}</code></pre>
+    </div>
+</div>
+
+<script>
+    // Refresh the page every 10 seconds to update the log viewer
+    setTimeout(function(){
+       window.location.reload(1);
+    }, 10000);
+</script>
+{% endblock %}

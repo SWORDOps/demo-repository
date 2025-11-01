@@ -28,6 +28,7 @@
                         <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.history' %} selected{% endif %}" href="{{ url_for('main.history') }}">Alert History</a></li>
                         <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.analytics' %} selected{% endif %}" href="{{ url_for('main.analytics') }}">Analytics</a></li>
                         <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.on_router_defense' %} selected{% endif %}" href="{{ url_for('main.on_router_defense') }}">On-Router Defense</a></li>
+                        <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'recovery.recovery' %} selected{% endif %}" href="{{ url_for('recovery.recovery') }}">Hardware Recovery</a></li>
                         <li class="UnderlineNav-item"><a class="UnderlineNav-link{% if request.endpoint == 'main.rpki_helper' %} selected{% endif %}" href="{{ url_for('main.rpki_helper') }}">RPKI Helper</a></li>
                     </ul>
                 </nav>
