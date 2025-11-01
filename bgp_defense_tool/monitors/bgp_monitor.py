@@ -1,12 +1,19 @@
 import time
 import os
 import re
+import sys
 from netmiko import ConnectHandler
 from dotenv import load_dotenv
-from database import get_db_connection
 from datetime import datetime
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+# Add the project root to the Python path to allow for absolute imports
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, project_root)
+
+from bgp_defense_tool.database import get_db_connection
+
+# Load environment variables from the root .env file
+dotenv_path = os.path.join(project_root, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 def get_bgp_summary(device):
