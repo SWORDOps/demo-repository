@@ -3,7 +3,12 @@ import os
 from netmiko import ConnectHandler
 from dotenv import load_dotenv
 
-# .env file is now loaded by the application factory in __init__.py
+from dotenv import load_dotenv
+
+# Load environment variables from the root .env file
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 def get_device_config():
     """Returns a dictionary with the device connection parameters from environment variables."""

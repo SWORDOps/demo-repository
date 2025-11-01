@@ -1,0 +1,8 @@
+/* Custom styles for a better dark theme experience */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.UnderlineNav-link.selected {
+    border-bottom-color: #f78166 !important; /* A nice orange accent for the dark theme */
+}
