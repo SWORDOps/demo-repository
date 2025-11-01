@@ -17,8 +17,9 @@ def create_app():
         pass
 
     # Register blueprints
-    from .blueprints import main
+    from .blueprints import main, recovery_ui
     app.register_blueprint(main.bp)
+    app.register_blueprint(recovery_ui.bp)
 
     # Register custom template filters
     from . import template_filters

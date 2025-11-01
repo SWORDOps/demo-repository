@@ -34,3 +34,18 @@ This application is a comprehensive BGP monitoring and active defense platform. 
     python app.py
     ```
     The application will be available at `http://127.0.0.1:5000`.
+
+## Hardware Recovery Tool
+
+Included in the `scripts/` directory is a powerful TUI-based hardware recovery and analysis tool, `cisco_recovery.sh`. This tool is intended for advanced users and provides low-level hardware access for tasks like password recovery, JTAG exploitation, and firmware analysis.
+
+### Features
+
+*   **Multi-Platform Support:** Targets Cisco ISR, ASA, and generic MIPS devices.
+*   **JTAG Exploitation:** Tools for dumping memory and flash.
+*   **Firmware Analysis:** Automated filesystem analysis and bootloader scanning.
+*   **ROMMON Recovery:** Automated password reset workflows.
+
+### ⚠️ Disclaimer
+
+This tool contains dangerous features, especially the JTAG memory write function. It can cause irreversible damage to the target device. The user assumes all responsibility for any actions performed by this script. **Use with extreme caution and only as root.**
