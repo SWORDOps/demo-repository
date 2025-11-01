@@ -6,18 +6,24 @@ from datetime import datetime
 from dotenv import load_dotenv
 from ipaddress import ip_network
 
-# Local module imports
-from database import get_db_connection
-from mitigation_logic import mitigate_hijack, signal_upstream
+import sys
 
-# Load environment variables
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+# Add the project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, project_root)
+
+# Local module imports
+from bgp_defense_tool.database import get_db_connection
+from bgp_defense_tool.logic.mitigation_logic import mitigate_hijack, signal_upstream
+
+# Load environment variables from the root .env file
+dotenv_path = os.path.join(project_root, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 # --- Configuration ---
 def load_config():
-    """Loads the main configuration file."""
-    config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+    """Loads the main configuration file from the project root."""
+    config_path = os.path.join(project_root, 'config.json')
     with open(config_path, 'r') as f:
         return json.load(f)
 

@@ -1,5 +1,5 @@
 import re
-from mitigation_logic import send_config_to_router
+from .mitigation_logic import send_config_to_router
 
 def find_orphaned_objects(config=None):
     """
