@@ -22,6 +22,6 @@ def create_app():
 
     # Register custom template filters
     from . import template_filters
-    app.register_template_filter(template_filters.strftime)
+    app.add_template_filter(template_filters.strftime)
 
     return app
