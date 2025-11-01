@@ -3,3 +3,7 @@ netmiko
 python-dotenv
 requests
 pymongo
+pytest
+pytest-mock
+pytest-flask
+abuseipdb

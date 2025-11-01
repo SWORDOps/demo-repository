@@ -132,34 +132,38 @@ def apply_flowspec_rule(source_prefix=None, dest_prefix=None):
 
 def set_community_for_neighbor(neighbor_ip, prefix, communities):
     """
-    Applies a BGP community string for a specific prefix to a single neighbor.
+    Applies a BGP community string for a specific prefix to a single neighbor and verifies the configuration.
+    Returns a tuple: (success_boolean, message_string).
     """
     bgp_asn = os.getenv('BGP_ASN')
-    # Sanitize inputs for command strings
     prefix_sanitized = prefix.replace('/', '_').replace('.', '_')
     neighbor_sanitized = neighbor_ip.replace('.', '_')
-    # Community strings can be complex, so we'll just use a generic name
     route_map_name = f"COMMUNITY_{prefix_sanitized}_{neighbor_sanitized}"
     prefix_list_name = f"PL_COMMUNITY_{prefix_sanitized}"
 
     commands = [
-        # Create an ACL to match the specific prefix
         f'ip prefix-list {prefix_list_name} permit {prefix}',
-        # Create the route-map
         f'route-map {route_map_name} permit 10',
         f' match ip address prefix-list {prefix_list_name}',
         f' set community {communities}',
         'exit',
-        # Create a second sequence to permit other routes without modification
         f'route-map {route_map_name} permit 20',
         'exit',
-        # Apply the route-map to the neighbor
         f'router bgp {bgp_asn}',
         f' neighbor {neighbor_ip} route-map {route_map_name} out',
         'end'
     ]
 
-    return send_config_to_router(commands)
+    output = send_config_to_router(commands)
+    if "Error" in output:
+        return False, output
+
+    # Closed-loop verification
+    verification_output = send_config_to_router([f'show running-config | include neighbor {neighbor_ip} route-map {route_map_name}'])
+    if route_map_name in verification_output:
+        return True, f"Successfully applied community policy to neighbor {neighbor_ip} for prefix {prefix}."
+    else:
+        return False, f"Failed to verify community policy for neighbor {neighbor_ip}. Manual check required."
 
 # --- BGP Neighbor Management Functions ---
 
@@ -184,7 +188,10 @@ def activate_neighbor(neighbor_ip):
     return send_config_to_router(commands)
 
 def provision_neighbor(neighbor_ip, remote_as, description=""):
-    """Configures a new BGP neighbor on the router."""
+    """
+    Configures a new BGP neighbor on the router and verifies the configuration.
+    Returns a tuple: (success_boolean, message_string).
+    """
     bgp_asn = os.getenv('BGP_ASN')
     commands = [
         f'router bgp {bgp_asn}',
@@ -193,7 +200,17 @@ def provision_neighbor(neighbor_ip, remote_as, description=""):
     if description:
         commands.append(f' neighbor {neighbor_ip} description {description}')
     commands.append('end')
-    return send_config_to_router(commands)
+
+    output = send_config_to_router(commands)
+    if "Error" in output:
+        return False, output
+
+    # Closed-loop verification
+    verification_output = send_config_to_router([f'show running-config | include neighbor {neighbor_ip}'])
+    if f"neighbor {neighbor_ip} remote-as {remote_as}" in verification_output:
+        return True, f"Successfully provisioned neighbor {neighbor_ip}."
+    else:
+        return False, f"Failed to verify provisioning for neighbor {neighbor_ip}. Manual check required."
 
 import re
 

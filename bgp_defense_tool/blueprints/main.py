@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from datetime import datetime, timedelta
 import os
 import json
@@ -12,7 +12,7 @@ from ..logic.mitigation_logic import (
     get_active_influence_policies, withdraw_deprioritize_route_for_neighbor,
     withdraw_influence_neighbor_with_more_specific, withdraw_igp_route,
     set_community_for_neighbor, withdraw_set_community_for_neighbor,
-    provision_neighbor, shutdown_neighbor, activate_neighbor
+    provision_neighbor, shutdown_neighbor, activate_neighbor, send_config_to_router
 )
 from ..logic.audit_logic import find_orphaned_objects, cleanup_orphaned_objects, analyze_bgp_best_practices
 
@@ -163,7 +163,8 @@ def influence_bgp():
         influence_neighbor_with_more_specific(neighbor_ip, prefix)
     elif action == 'set_community':
         communities = request.form.get('communities')
-        set_community_for_neighbor(neighbor_ip, prefix, communities)
+        success, message = set_community_for_neighbor(neighbor_ip, prefix, communities)
+        flash(message, 'success' if success else 'error')
     return redirect(url_for('main.index'))
 
 @bp.route('/on_router_defense', methods=['GET', 'POST'])
@@ -219,6 +220,8 @@ def rtbh():
     signal_upstream(prefix, communities)
     return redirect(url_for('main.index'))
 
+from flask import flash
+
 @bp.route('/neighbors', methods=['GET', 'POST'])
 def neighbors():
     if request.method == 'POST':
@@ -227,10 +230,13 @@ def neighbors():
         if action == 'provision':
             remote_as = request.form.get('remote_as')
             description = request.form.get('description')
-            provision_neighbor(neighbor_ip, remote_as, description)
+            success, message = provision_neighbor(neighbor_ip, remote_as, description)
+            flash(message, 'success' if success else 'error')
         elif action == 'shutdown':
+            # Assuming shutdown_neighbor will be updated to return a tuple as well
             shutdown_neighbor(neighbor_ip)
         elif action == 'activate':
+            # Assuming activate_neighbor will be updated to return a tuple as well
             activate_neighbor(neighbor_ip)
         return redirect(url_for('main.neighbors'))
     db = get_db_connection()
@@ -250,7 +256,6 @@ def auditing():
         return redirect(url_for('main.auditing'))
 
     # Correctly fetch the running configuration for the audit
-    from ..logic.mitigation_logic import send_config_to_router
     config = send_config_to_router(['show running-config'])
 
     orphaned_objects = find_orphaned_objects(config)
