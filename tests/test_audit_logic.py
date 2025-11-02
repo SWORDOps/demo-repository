@@ -6,7 +6,6 @@ router bgp 65535
  neighbor 1.1.1.1 remote-as 65501
  neighbor 1.1.1.1 route-map DEPRIORITIZE_192.0.2.0_24_1.1.1.1 out
  neighbor 2.2.2.2 remote-as 65502
- neighbor 2.2.2.2 maximum-prefix 1000
 !
 route-map DEPRIORITIZE_192.0.2.0_24_1.1.1.1 permit 10
  match ip address prefix-list PL_192.0.2.0_24

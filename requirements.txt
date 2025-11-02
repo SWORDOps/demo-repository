@@ -6,4 +6,3 @@ pymongo
 pytest
 pytest-mock
 pytest-flask
-abuseipdb

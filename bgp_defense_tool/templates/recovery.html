@@ -26,11 +26,42 @@
             <li><strong>This page will automatically refresh to show the latest log output from the script.</strong></li>
         </ol>
     </div>
+
+    <div class="Box-row">
+        <h3 class="h4">Pre-flight Check</h3>
+        <p>The following dependencies are required to run the recovery script. Please ensure they are installed on the system where you will run the script.</p>
+        <table class="table-striped table-responsive" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Command</th>
+                    <th>Status</th>
+                    <th>Installation Suggestion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for dep in dependencies %}
+                <tr>
+                    <td>{{ dep.category }}</td>
+                    <td><code>{{ dep.command }}</code></td>
+                    <td>
+                        {% if dep.status == "Found" %}
+                            <span class="Label Label--success">Found</span>
+                        {% else %}
+                            <span class="Label Label--danger">Missing</span>
+                        {% endif %}
+                    </td>
+                    <td><small>{{ dep.suggestion }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <div class="Box mt-4">
     <div class="Box-header">
-        <h3 class="Box-title">Live Log Viewer</h3>
+        <h3 class="Box-title">Live Log Viewer (Last 50 Lines)</h3>
     </div>
     <div class="Box-body">
         <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 6px;"><code>{{ log_content }}</code></pre>
